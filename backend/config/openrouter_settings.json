@@ -1,0 +1,5 @@
+{
+  "api_key": "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",
+  "model": "anthropic/claude-haiku-4-5",
+  "daily_cap_usd": 10.0
+}

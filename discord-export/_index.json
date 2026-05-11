@@ -1,0 +1,757 @@
+{
+  "guild_id": "1151855354934734919",
+  "guild_name": "Onimator.com | Bumble Tinder Instagram Phones and API automation",
+  "exported_at": "2026-04-11T07:29:29",
+  "channels": [
+    {
+      "id": "1151856048580345936",
+      "name": "💭〢general",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 13
+    },
+    {
+      "id": "1151856093132238948",
+      "name": "🔥〢tinder",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 16
+    },
+    {
+      "id": "1151856175499980873",
+      "name": "📷〢phones-instagram",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 15
+    },
+    {
+      "id": "1156266695292375160",
+      "name": "🐝〢bumble",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 14
+    },
+    {
+      "id": "1156643014521913456",
+      "name": "📜〢server・rules",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 0
+    },
+    {
+      "id": "1156643014521913457",
+      "name": "🔒〢moderator-only",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 37
+    },
+    {
+      "id": "1156970260302397450",
+      "name": "⭕〢api-instagram",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": "Channel about Instagram Mass Story Likes service: https://insta.onimator.com/ \n\nTutorial guide: https://www.youtube.com/watch?v=VnLwGvLOiQo",
+      "position": 17
+    },
+    {
+      "id": "1156984381789966376",
+      "name": "⋐═════・𝐕𝐄𝐑𝐈𝐅𝐘・ ━━━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 1
+    },
+    {
+      "id": "1156984415931600977",
+      "name": "✅〢verification",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156984381789966376",
+      "parent_name": "⋐═════・𝐕𝐄𝐑𝐈𝐅𝐘・ ━━━━━━⋑",
+      "topic": null,
+      "position": 1
+    },
+    {
+      "id": "1156984744223985674",
+      "name": "⋐══・𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐓𝐈𝐎𝐍・ ━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 2
+    },
+    {
+      "id": "1156984791699300474",
+      "name": "🔑〢invites",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156984744223985674",
+      "parent_name": "⋐══・𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐓𝐈𝐎𝐍・ ━━━⋑",
+      "topic": null,
+      "position": 3
+    },
+    {
+      "id": "1156984807352447070",
+      "name": "🎫〢ticket-support",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156984744223985674",
+      "parent_name": "⋐══・𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐓𝐈𝐎𝐍・ ━━━⋑",
+      "topic": null,
+      "position": 5
+    },
+    {
+      "id": "1156985070511476869",
+      "name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 7
+    },
+    {
+      "id": "1156986243154972784",
+      "name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 14
+    },
+    {
+      "id": "1156986260926234704",
+      "name": "🔒〢bots-setup",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 38
+    },
+    {
+      "id": "1156986278588461217",
+      "name": "🔒〢staff-chat",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 36
+    },
+    {
+      "id": "1156986333408002158",
+      "name": "🔒〢staff vc",
+      "type": 2,
+      "type_name": "voice",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 3
+    },
+    {
+      "id": "1156986428895526913",
+      "name": "🔒〢Meetings",
+      "type": 2,
+      "type_name": "voice",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 4
+    },
+    {
+      "id": "1156986468674318368",
+      "name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 15
+    },
+    {
+      "id": "1156986488970563655",
+      "name": "🔨〢join-leave",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 40
+    },
+    {
+      "id": "1156986558751199292",
+      "name": "🔨〢message-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 41
+    },
+    {
+      "id": "1156986572672090172",
+      "name": "🔨〢channel-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 42
+    },
+    {
+      "id": "1156986591944912996",
+      "name": "🔨〢ban-unban-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 43
+    },
+    {
+      "id": "1156986608202039297",
+      "name": "🔨〢other-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 44
+    },
+    {
+      "id": "1156994329924096071",
+      "name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄𝐒・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 4
+    },
+    {
+      "id": "1156994462854160404",
+      "name": "🔗〢how-to-start",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1357663444094161087",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄・ ━━━━⋑",
+      "topic": "You can find our tutorials in your client panel at https://onimator.com/",
+      "position": 50
+    },
+    {
+      "id": "1156994775979937822",
+      "name": "⋐══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐒𝐓𝐀𝐓𝐒・ ━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 0
+    },
+    {
+      "id": "1184036661340950598",
+      "name": "👀〢common-problems",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1357663444094161087",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄・ ━━━━⋑",
+      "topic": null,
+      "position": 49
+    },
+    {
+      "id": "1200039758483697765",
+      "name": "🟡〢snapchat",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 18
+    },
+    {
+      "id": "1201868737008115712",
+      "name": "💵〢marketplace",
+      "type": 15,
+      "type_name": "forum",
+      "parent_id": "1201870035866353724",
+      "parent_name": "⋐═══・MARKETPLACE・ ━━━━⋑",
+      "topic": "Disclaimer: All transactions here are at your own risk. We don't guarantee item/service quality. Admins and mods are not responsible for disputes or issues.",
+      "position": 33
+    },
+    {
+      "id": "1201870035866353724",
+      "name": "⋐═══・MARKETPLACE・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 13
+    },
+    {
+      "id": "1202353128088010812",
+      "name": "🤝〢looking-for",
+      "type": 15,
+      "type_name": "forum",
+      "parent_id": "1201870035866353724",
+      "parent_name": "⋐═══・MARKETPLACE・ ━━━━⋑",
+      "topic": "Disclaimer: All transactions here are at your own risk. We don't guarantee item/service quality. Admins and mods are not responsible for disputes or issues.",
+      "position": 34
+    },
+    {
+      "id": "1207644307721297970",
+      "name": "⋐═══・ANNOUNCEMENTS・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 5
+    },
+    {
+      "id": "1207644611388907550",
+      "name": "⭐〢news",
+      "type": 5,
+      "type_name": "announce",
+      "parent_id": "1207644307721297970",
+      "parent_name": "⋐═══・ANNOUNCEMENTS・ ━━━━⋑",
+      "topic": null,
+      "position": 12
+    },
+    {
+      "id": "1209114451710574593",
+      "name": "📖〢pro-tips",
+      "type": 5,
+      "type_name": "announce",
+      "parent_id": "1357663444094161087",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄・ ━━━━⋑",
+      "topic": "Here's a place where you can find tips to enhance your user experience.",
+      "position": 51
+    },
+    {
+      "id": "1214495022490067005",
+      "name": "🔴〢reddit",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 19
+    },
+    {
+      "id": "1227194783940874270",
+      "name": "⋐══════・FAQ・═══════⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 12
+    },
+    {
+      "id": "1227195528899723315",
+      "name": "🤓〢questions",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1227194783940874270",
+      "parent_name": "⋐══════・FAQ・═══════⋑",
+      "topic": "We will choose questions from this thread and reply to them during video sessions or directly on the channel.",
+      "position": 32
+    },
+    {
+      "id": "1227506384917102653",
+      "name": "⋐═══・iphone・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 11
+    },
+    {
+      "id": "1227506709367357531",
+      "name": "📱〢ios-automation",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1227506384917102653",
+      "parent_name": "⋐═══・iphone・ ━━━━⋑",
+      "topic": "Our iPhones automation is not ready yet, MVP should be ready by end of month!",
+      "position": 31
+    },
+    {
+      "id": "1238789514848370778",
+      "name": "⋐═══・NomixCloner・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 9
+    },
+    {
+      "id": "1238789938703634565",
+      "name": "💭〢general",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1238789514848370778",
+      "parent_name": "⋐═══・NomixCloner・ ━━━━⋑",
+      "topic": null,
+      "position": 25
+    },
+    {
+      "id": "1278644338603065396",
+      "name": "⋐══════・Voice Chat・═══════⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 6
+    },
+    {
+      "id": "1298787900715962428",
+      "name": "verification-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 45
+    },
+    {
+      "id": "1298946885679190046",
+      "name": "🫂〢Members:5056",
+      "type": 2,
+      "type_name": "voice",
+      "parent_id": "1156994775979937822",
+      "parent_name": "⋐══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐒𝐓𝐀𝐓𝐒・ ━━━⋑",
+      "topic": null,
+      "position": 0
+    },
+    {
+      "id": "1298948669478801458",
+      "name": "🤖〢Bots:19",
+      "type": 2,
+      "type_name": "voice",
+      "parent_id": "1156994775979937822",
+      "parent_name": "⋐══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐒𝐓𝐀𝐓𝐒・ ━━━⋑",
+      "topic": null,
+      "position": 1
+    },
+    {
+      "id": "1299025031808159877",
+      "name": "🔨〢ticket-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 46
+    },
+    {
+      "id": "1299388222790438933",
+      "name": "🔨〢ticket-transcripts",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 47
+    },
+    {
+      "id": "1299436964428124190",
+      "name": "👋┃welcome",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156984381789966376",
+      "parent_name": "⋐═════・𝐕𝐄𝐑𝐈𝐅𝐘・ ━━━━━━⋑",
+      "topic": null,
+      "position": 2
+    },
+    {
+      "id": "1301233752113942588",
+      "name": "Live Q&A",
+      "type": 13,
+      "type_name": "stage",
+      "parent_id": "1278644338603065396",
+      "parent_name": "⋐══════・Voice Chat・═══════⋑",
+      "topic": null,
+      "position": 2
+    },
+    {
+      "id": "1301302960558571592",
+      "name": "🔓〢request-access",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1201870035866353724",
+      "parent_name": "⋐═══・MARKETPLACE・ ━━━━⋑",
+      "topic": null,
+      "position": 35
+    },
+    {
+      "id": "1303289091349282876",
+      "name": "⋐══・Languages・ ━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 10
+    },
+    {
+      "id": "1303289427862355968",
+      "name": "🇵🇱〢poland",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1303289091349282876",
+      "parent_name": "⋐══・Languages・ ━━━⋑",
+      "topic": null,
+      "position": 26
+    },
+    {
+      "id": "1303289636566732842",
+      "name": "🇮🇹〢italy",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1303289091349282876",
+      "parent_name": "⋐══・Languages・ ━━━⋑",
+      "topic": null,
+      "position": 27
+    },
+    {
+      "id": "1303289793936887808",
+      "name": "🇩🇪〢germany",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1303289091349282876",
+      "parent_name": "⋐══・Languages・ ━━━⋑",
+      "topic": null,
+      "position": 28
+    },
+    {
+      "id": "1303289841873584169",
+      "name": "🇪🇸〢spain",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1303289091349282876",
+      "parent_name": "⋐══・Languages・ ━━━⋑",
+      "topic": null,
+      "position": 29
+    },
+    {
+      "id": "1303290563868626985",
+      "name": "🇫🇷〢france",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1303289091349282876",
+      "parent_name": "⋐══・Languages・ ━━━⋑",
+      "topic": null,
+      "position": 30
+    },
+    {
+      "id": "1314346536716603422",
+      "name": "feature-requests",
+      "type": 15,
+      "type_name": "forum",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 22
+    },
+    {
+      "id": "1342852465678225449",
+      "name": "⚫〢threads",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 20
+    },
+    {
+      "id": "1357097194850746571",
+      "name": "🔨〢anti-spam-logs",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986468674318368",
+      "parent_name": "⋐═══・𝐒𝐄𝐑𝐕𝐄𝐑 𝐋𝐎𝐆𝐒・━━━⋑",
+      "topic": null,
+      "position": 48
+    },
+    {
+      "id": "1357663444094161087",
+      "name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 16
+    },
+    {
+      "id": "1357663540009242744",
+      "name": "🔗〢how-to-start",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156994329924096071",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄𝐒・ ━━━━⋑",
+      "topic": null,
+      "position": 9
+    },
+    {
+      "id": "1358043801347821830",
+      "name": "👀〢common-problems",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156994329924096071",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄𝐒・ ━━━━⋑",
+      "topic": null,
+      "position": 10
+    },
+    {
+      "id": "1358074652877918350",
+      "name": "📖〢pro-tips",
+      "type": 5,
+      "type_name": "announce",
+      "parent_id": "1156994329924096071",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄𝐒・ ━━━━⋑",
+      "topic": null,
+      "position": 11
+    },
+    {
+      "id": "1401591281724948561",
+      "name": "🔒〢brayn-tests",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156986243154972784",
+      "parent_name": "⋐═══・𝐒𝐓𝐀𝐅𝐅 𝐀𝐑𝐄𝐀・ ━━━━⋑",
+      "topic": null,
+      "position": 39
+    },
+    {
+      "id": "1413064454811287572",
+      "name": "💥〢tiktok",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156985070511476869",
+      "parent_name": "⋐═══・𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐓𝐘・ ━━━━⋑",
+      "topic": null,
+      "position": 21
+    },
+    {
+      "id": "1413205888927268967",
+      "name": "📖〢knowledge-base",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156994329924096071",
+      "parent_name": "⋐═══・𝐑𝐄𝐒𝐎𝐔𝐑𝐂𝐄𝐒・ ━━━━⋑",
+      "topic": null,
+      "position": 8
+    },
+    {
+      "id": "1425788246771761182",
+      "name": "🔵〢general",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1478900420314402989",
+      "parent_name": "⋐═══・xmator_com・-━━━━⋑",
+      "topic": null,
+      "position": 23
+    },
+    {
+      "id": "1441784118252671147",
+      "name": "🧠〢onimator-gpt",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1156984744223985674",
+      "parent_name": "⋐══・𝐈𝐍𝐅𝐎𝐑𝐌𝐀𝐓𝐈𝐎𝐍・ ━━━⋑",
+      "topic": null,
+      "position": 4
+    },
+    {
+      "id": "1446225802663428268",
+      "name": "💥〢announcements",
+      "type": 5,
+      "type_name": "announce",
+      "parent_id": "1238789514848370778",
+      "parent_name": "⋐═══・NomixCloner・ ━━━━⋑",
+      "topic": null,
+      "position": 24
+    },
+    {
+      "id": "1478900420314402989",
+      "name": "⋐═══・xmator_com・-━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 8
+    },
+    {
+      "id": "1479534505235710003",
+      "name": "⋐═══・Tools・ ━━━━⋑",
+      "type": 4,
+      "type_name": "category",
+      "parent_id": null,
+      "parent_name": null,
+      "topic": null,
+      "position": 3
+    },
+    {
+      "id": "1479538761816735765",
+      "name": "onimator_helper",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1479534505235710003",
+      "parent_name": "⋐═══・Tools・ ━━━━⋑",
+      "topic": null,
+      "position": 7
+    },
+    {
+      "id": "1479539038859038801",
+      "name": "onimator",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1479534505235710003",
+      "parent_name": "⋐═══・Tools・ ━━━━⋑",
+      "topic": null,
+      "position": 6
+    },
+    {
+      "id": "1479549771004903516",
+      "name": "xmator",
+      "type": 0,
+      "type_name": "text",
+      "parent_id": "1479534505235710003",
+      "parent_name": "⋐═══・Tools・ ━━━━⋑",
+      "topic": null,
+      "position": 51
+    }
+  ]
+}

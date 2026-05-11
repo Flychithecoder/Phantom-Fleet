@@ -1,0 +1,1 @@
+{"version":"0.0.1","configurations":[{"name":"phantomfleet-frontend","runtimeExecutable":"npm","runtimeArgs":["run","dev"],"port":3016}]}

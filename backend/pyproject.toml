@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phantom-fleet"
+version = "0.0.1"
+description = "Phantom Fleet — invisible automation at fleet scale. A Scaler Pro product."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "asyncpg>=0.30.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.13.3",
+    "pydantic>=2.9.2",
+    "pydantic-settings>=2.6.0",
+    "redis>=5.1.1",
+    "httpx>=0.27.2",
+    "anthropic>=0.39.0",
+    "openai>=1.54.0",
+    "python-dotenv>=1.0.1",
+    "orjson>=3.10.10",
+    "structlog>=24.4.0",
+    "rich>=13.9.2",
+    "typer>=0.12.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.1",
+    "mypy>=1.13.0",
+    "black>=24.10.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["phantom_fleet"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+ignore = ["E501"]

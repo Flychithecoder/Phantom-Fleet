@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Network — required for Ktor HTTP server and proxy socket probe -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Device info — carrier name, MCC/MNC -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- Installed packages enumeration (GAID + package list) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!-- Camera — required for virtual camera frame injection -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Foreground services — HTTP server + virtual camera service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!-- Keep CPU alive while HTTP server is running -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:label="Phantom Fleet"
+        android:allowBackup="false"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <!-- Main launcher activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Accessibility service — drives all UI automation -->
+        <service
+            android:name=".PhantomAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Virtual camera foreground service — injects frames into camera2 pipeline -->
+        <service
+            android:name=".camera.VirtualCameraService"
+            android:foregroundServiceType="camera"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

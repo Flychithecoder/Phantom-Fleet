@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Phantom Fleet — Design System
+ * Dark-first premium SaaS aesthetic. Neon cyan-green signature accent.
+ * Optimized for 14-24hr sessions in a dim room — zero eye strain.
+ */
+
+@layer base {
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 6% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 162 100% 54%;
+    --primary-foreground: 240 10% 3.9%;
+    --secondary: 240 6% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 6% 15%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 292 91% 68%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 91% 65%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 18%;
+    --input: 240 6% 18%;
+    --ring: 162 100% 54%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: hsl(162 100% 54% / 0.3);
+    color: hsl(0 0% 98%);
+  }
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(240 10% 3.9%);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(240 6% 18%);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(240 6% 25%);
+  }
+}
+
+@layer components {
+  /* ---------- Glass panels with subtle noise + glow ---------- */
+  .phantom-panel {
+    @apply bg-phantom-panel border border-phantom-border rounded-xl;
+    background-image:
+      linear-gradient(135deg, hsl(240 6% 10%) 0%, hsl(240 6% 7%) 100%);
+    box-shadow:
+      0 0 0 1px hsl(240 6% 18% / 0.5),
+      0 24px 48px -24px hsl(0 0% 0% / 0.6),
+      inset 0 1px 0 hsl(0 0% 100% / 0.03);
+  }
+  .phantom-panel-hi {
+    @apply phantom-panel;
+    background-image:
+      linear-gradient(135deg, hsl(240 6% 14%) 0%, hsl(240 6% 10%) 100%);
+  }
+  .phantom-panel-accent {
+    @apply phantom-panel;
+    border-color: hsl(162 100% 54% / 0.3);
+    box-shadow:
+      0 0 0 1px hsl(162 100% 54% / 0.15),
+      0 24px 48px -24px hsl(162 100% 54% / 0.15),
+      inset 0 1px 0 hsl(0 0% 100% / 0.05);
+  }
+  /* ---------- Subtle grid background on top-level pages ---------- */
+  .phantom-grid-bg {
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(162 100% 54% / 0.08), transparent),
+                      linear-gradient(hsl(240 6% 18% / 0.3) 1px, transparent 1px),
+                      linear-gradient(90deg, hsl(240 6% 18% / 0.3) 1px, transparent 1px);
+    background-size: auto, 60px 60px, 60px 60px;
+  }
+  /* ---------- Neon accent text ---------- */
+  .phantom-accent-text {
+    @apply text-phantom-accent;
+    text-shadow: 0 0 24px hsl(162 100% 54% / 0.4);
+  }
+  /* ---------- Kbd style ---------- */
+  .phantom-kbd {
+    @apply inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-mono font-medium bg-phantom-panelHi border border-phantom-border text-phantom-ghost;
+  }
+  /* ---------- Status dots ---------- */
+  .phantom-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+  .phantom-dot-alive {
+    @apply bg-phantom-alive;
+    box-shadow: 0 0 8px hsl(142 71% 45% / 0.6);
+  }
+  .phantom-dot-warning {
+    @apply bg-phantom-amber;
+    box-shadow: 0 0 8px hsl(38 92% 58% / 0.6);
+  }
+  .phantom-dot-critical {
+    @apply bg-phantom-red;
+    box-shadow: 0 0 8px hsl(0 91% 65% / 0.6);
+  }
+  .phantom-dot-accent {
+    @apply bg-phantom-accent;
+    box-shadow: 0 0 8px hsl(162 100% 54% / 0.6);
+  }
+  /* ---------- Glowing number badge (for KPI scorecards) ---------- */
+  .phantom-metric {
+    @apply font-display font-bold tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .phantom-metric-lg {
+    @apply phantom-metric text-5xl;
+  }
+  .phantom-metric-xl {
+    @apply phantom-metric text-7xl;
+  }
+  /* ---------- Shimmer loading skeleton ---------- */
+  .phantom-skeleton {
+    @apply relative overflow-hidden bg-phantom-panelHi rounded-md;
+  }
+  .phantom-skeleton::after {
+    content: "";
+    @apply absolute inset-0 bg-gradient-to-r from-transparent via-phantom-border to-transparent;
+    animation: shimmer 2s linear infinite;
+  }
+}

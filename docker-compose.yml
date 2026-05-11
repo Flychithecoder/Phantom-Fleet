@@ -1,0 +1,69 @@
+version: "3.9"
+
+# Phantom Fleet — local dev infrastructure
+# Runs Postgres + Redis + backend + frontend as one stack.
+# The backend does NOT auto-launch any IG clones — proxy safety gate is
+# enforced in application code, not infrastructure.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: phantomfleet-postgres
+    environment:
+      POSTGRES_USER: phantomfleet
+      POSTGRES_PASSWORD: phantomfleet_dev
+      POSTGRES_DB: phantomfleet
+    ports:
+      - "5436:5432"   # avoid collision with scalerpro-postgres on 5435
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phantomfleet"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: phantomfleet-redis
+    ports:
+      - "6380:6379"   # avoid collision with other Scaler Pro redis instances
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: phantomfleet-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://phantomfleet:phantomfleet_dev@postgres:5432/phantomfleet
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: info
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: uvicorn phantom_fleet.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    image: node:22-alpine
+    container_name: phantomfleet-frontend
+    working_dir: /app
+    ports:
+      - "3016:3016"
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:

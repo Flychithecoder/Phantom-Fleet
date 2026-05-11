@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phantom Fleet</string>
+    <string name="accessibility_service_description">Phantom Fleet Companion — automates UI actions on approved apps for fleet-scale orchestration. A Scaler Pro product.</string>
+</resources>
