@@ -594,6 +594,15 @@ class GmailCreationAgent:
         Raises:
             RuntimeError: If ADB exits with non-zero status.
         """
+        from ...core import adb_router
+        if adb_router.enabled():
+            try:
+                return await adb_router.route_adb(["-s", serial, *args], 60)
+            except adb_router.AdbRouteError as e:
+                raise RuntimeError(str(e)) from e
+            except adb_router.NotRouted:
+                if not adb_router.fallback_allowed():
+                    raise
         cmd = ["adb", "-s", serial, *args]
         proc = await asyncio.create_subprocess_exec(
             *cmd,

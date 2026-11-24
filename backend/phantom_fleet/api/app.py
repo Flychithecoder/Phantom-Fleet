@@ -33,6 +33,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import fleet, accounts, capacity, agents, schedule, funnel, ig_growth, phase1, phase2
+from .routes import fleet_mirror as fleet_mirror_routes
 from .routes import proxy_pool as proxy_pool_routes
 from .routes import threads as threads_routes
 from .routes import instagram as instagram_routes
@@ -663,6 +664,7 @@ def create_app() -> FastAPI:
     application.include_router(trending_routes.router,       prefix="/api/trending",         tags=["trending"])
     application.include_router(learning_routes.router,       prefix="/api/learning",         tags=["learning"])
     application.include_router(reddit_routes.router,         prefix="/api/reddit",           tags=["reddit"])
+    application.include_router(fleet_mirror_routes.router,   prefix="/api/fleet-mirror",     tags=["fleet-mirror"])
 
     # ------------------------------------------------------------------
     # Health

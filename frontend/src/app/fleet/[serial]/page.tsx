@@ -10,6 +10,7 @@ import {
   Eye, EyeOff, Key, CheckSquare, Download, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import FleetMirrorView from "@/components/FleetMirrorView";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -338,6 +339,8 @@ export default function DeviceManagePage({
   const [backendDown, setBackendDown] = useState(false);
   const [verifying, setVerifying]   = useState(false);
   const [syncing, setSyncing]       = useState(false);
+  const [showMirror, setShowMirror] = useState(false);       // Fleet Mirror live screen
+  const [mirrorControl, setMirrorControl] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [importError, setImportError] = useState("");
@@ -698,6 +701,28 @@ export default function DeviceManagePage({
             <button onClick={() => setImportError("")} className="text-red-400/60 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
           </div>
         )}
+
+        {/* Live screen from the Fleet Mirror hub (single-use embed link minted by the backend) */}
+        <div className="glass rounded-xl border border-white/10 p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Live screen</span>
+            <span className="text-xs text-white/40">via Fleet Mirror</span>
+            <span className="flex-1" />
+            {showMirror && (
+              <label className="text-xs text-white/60 flex items-center gap-1.5">
+                <input type="checkbox" checked={mirrorControl} onChange={(e) => setMirrorControl(e.target.checked)} />
+                allow control
+              </label>
+            )}
+            <button
+              onClick={() => setShowMirror((v) => !v)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30"
+            >
+              {showMirror ? "Hide" : "Show live screen"}
+            </button>
+          </div>
+          {showMirror && <FleetMirrorView key={`${serial}-${mirrorControl}`} serial={serial} control={mirrorControl} height={720} />}
+        </div>
 
         {/* Hardware identity panel — mirror-provided, per CONTRACT.md §2 */}
         {device?.metadata && (

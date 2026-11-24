@@ -649,6 +649,15 @@ async def _run_adb(*args: str, timeout: float = 30) -> str:
     Raises ADBCommandFailed on non-zero exit or stderr output.
     Raises asyncio.TimeoutError if the command hangs.
     """
+    from . import adb_router
+    if adb_router.enabled():
+        try:
+            return await asyncio.wait_for(adb_router.route_adb(list(args), timeout), timeout + 15)
+        except adb_router.AdbRouteError as e:
+            raise ADBCommandFailed(str(e)) from e
+        except adb_router.NotRouted as e:
+            if not adb_router.fallback_allowed():
+                raise ADBCommandFailed(f"{e} (FLEET_MIRROR_ADB_FALLBACK=0)") from e
     cmd = ["adb", *args]
     try:
         result = await asyncio.wait_for(

@@ -535,6 +535,16 @@ class APKClient:
 
 async def _run_adb_cmd(adb_path: str, *args: str) -> str:
     """Run an adb command asynchronously, return stdout."""
+    from . import adb_router
+    if adb_router.enabled():
+        try:
+            return await adb_router.route_adb(list(args), 30)
+        except adb_router.AdbRouteError as e:
+            raise RuntimeError(str(e)) from e
+        except adb_router.NotRouted as e:
+            # `adb forward` (companion APK on this PC) has no hub equivalent: local adb, if allowed
+            if not adb_router.fallback_allowed():
+                raise RuntimeError(f"{e} (FLEET_MIRROR_ADB_FALLBACK=0)") from e
     cmd = [adb_path, *args]
     result = await asyncio.to_thread(_run_adb_sync, cmd)
     return result
