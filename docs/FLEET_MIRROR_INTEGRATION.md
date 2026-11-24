@@ -14,14 +14,16 @@ Phantom Fleet uses the Fleet Mirror hub (the phone-wall app on the main PC) for 
 
 ```
 # discovery: the hub's Mirror contract server (runs on the hub PC, 127.0.0.1 only)
-PHANTOM_MIRROR_URL=http://127.0.0.1:8766/k/<FLEET MIRROR API KEY>
+PHANTOM_MIRROR_URL=http://127.0.0.1:8766
 
 # phone actions + live screen through the hub
 FLEET_MIRROR_URL=https://192.168.1.16:22300          # or http://127.0.0.1:22301 on the hub PC
-FLEET_MIRROR_API_KEY=<FLEET MIRROR API KEY>          # Fleet Mirror: right-click a phone > Local API
+FLEET_MIRROR_API_KEY_FILE=C:\Users\admin\Projects\PhantomFleet\fleet-mirror\run\api-key.txt
+#   ^ a file holding the hub's API key, outside this repo: backend/.env is tracked in git, so never put the key in it.
+#   The mirror bridge sends the key as a header, so PHANTOM_MIRROR_URL needs no key in it.
 FLEET_MIRROR_CERT_SHA256=EC:12:E7:D3:AC:FD:42:8F:2A:B0:6F:67:23:52:C0:7C:CF:47:9F:3B:4D:7F:05:CC:75:D8:07:82:32:91:8B:37
 FLEET_MIRROR_ADB=1                                   # 0 = old behaviour (local adb)
-FLEET_MIRROR_ADB_FALLBACK=1                          # adb forward/connect: 1 = local adb, 0 = refuse
+FLEET_MIRROR_ADB_FALLBACK=0                          # adb forward/connect: 0 = refuse (recommended), 1 = local adb
 ```
 
 Keep the API key out of git and out of the browser. The frontend only ever receives one-time embed links.

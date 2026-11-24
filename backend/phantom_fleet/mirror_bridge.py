@@ -155,9 +155,13 @@ class MirrorBridge:
     ):
         self.base_url = base_url.rstrip("/")
         self.holder = holder
+        # Fleet Mirror's contract server needs its API key; sent as a header so the URL carries no secret
+        from .fleet_mirror_client import api_key_from_env
+        self._headers = {"X-Api-Key": api_key_from_env()} if api_key_from_env() else {}
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=timeout_sec,
+            headers=self._headers,
         )
         self._ws_task: Optional[asyncio.Task] = None
         self._listeners: list[Callable[[dict[str, Any]], Awaitable[None]]] = []
@@ -359,7 +363,11 @@ class MirrorBridge:
         backoff = 1.0
         while True:
             try:
-                async with websockets.connect(ws_url) as ws:  # type: ignore[attr-defined]
+                try:   # websockets >= 14 calls it additional_headers, older versions extra_headers
+                    _cm = websockets.connect(ws_url, additional_headers=self._headers)  # type: ignore[attr-defined]
+                except TypeError:
+                    _cm = websockets.connect(ws_url, extra_headers=self._headers)  # type: ignore[attr-defined]
+                async with _cm as ws:
                     log.info("mirror: WS connected %s", ws_url)
                     backoff = 1.0
                     async for raw in ws:

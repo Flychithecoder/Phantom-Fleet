@@ -37,6 +37,22 @@ import httpx
 Devices = str | Sequence[str]   # "all", one serial, or a list of serials
 
 
+def api_key_from_env() -> str:
+    """FLEET_MIRROR_API_KEY, or the contents of the file named by FLEET_MIRROR_API_KEY_FILE.
+    Prefer the file: keep the key out of .env files that are committed to git."""
+    import os
+    key = os.environ.get("FLEET_MIRROR_API_KEY", "").strip()
+    if key:
+        return key
+    path = os.environ.get("FLEET_MIRROR_API_KEY_FILE", "").strip()
+    if path:
+        try:
+            return Path(path).read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    return ""
+
+
 class FleetMirrorError(RuntimeError):
     def __init__(self, code: int, msg: str, action: str = ""):
         super().__init__(f"{action or 'papi'}: {msg} (code {code})")

@@ -5,7 +5,7 @@ Fleet Mirror (live phone screens + phone control through the Fleet Mirror hub).
     GET /api/fleet-mirror/embed?serial=…  single-use link (2 min) for the FleetMirrorView iframe
 
 The hub's API key stays on this server; the browser only ever sees the one-time embed link.
-Configuration: FLEET_MIRROR_URL, FLEET_MIRROR_API_KEY, FLEET_MIRROR_CERT_SHA256 (see core/adb_router.py).
+Configuration: FLEET_MIRROR_URL, FLEET_MIRROR_API_KEY_FILE, FLEET_MIRROR_CERT_SHA256 (see core/adb_router.py).
 """
 from __future__ import annotations
 
@@ -14,16 +14,16 @@ import re
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ...fleet_mirror_client import FleetMirrorClient, FleetMirrorError
+from ...fleet_mirror_client import FleetMirrorClient, FleetMirrorError, api_key_from_env
 
 router = APIRouter()
 _SERIAL = re.compile(r"^[A-Za-z0-9._:-]{4,64}$")
 
 
 def _client() -> FleetMirrorClient:
-    key = os.environ.get("FLEET_MIRROR_API_KEY", "")
+    key = api_key_from_env()
     if not key:
-        raise HTTPException(503, "Fleet Mirror is not configured (FLEET_MIRROR_API_KEY)")
+        raise HTTPException(503, "Fleet Mirror is not configured (FLEET_MIRROR_API_KEY_FILE)")
     return FleetMirrorClient(os.environ.get("FLEET_MIRROR_URL", "http://127.0.0.1:22301"), api_key=key,
                              cert_sha256=os.environ.get("FLEET_MIRROR_CERT_SHA256", ""), timeout=20)
 

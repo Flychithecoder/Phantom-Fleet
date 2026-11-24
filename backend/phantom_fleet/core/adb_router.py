@@ -10,7 +10,8 @@ Turn it on with environment variables (all read at call time):
 
     FLEET_MIRROR_ADB=1                    route adb calls through the hub (off = old behaviour, local adb)
     FLEET_MIRROR_URL=https://192.168.1.16:22300     (or http://127.0.0.1:22301 on the hub PC)
-    FLEET_MIRROR_API_KEY=fm_...           the hub's local API key
+    FLEET_MIRROR_API_KEY_FILE=C:\\path\\api-key.txt   file holding the hub's local API key (keep it out of git)
+    FLEET_MIRROR_API_KEY=fm_...           or the key itself (avoid in committed .env files)
     FLEET_MIRROR_CERT_SHA256=EC:12:...    the hub certificate fingerprint (https only)
     FLEET_MIRROR_ADB_FALLBACK=1           commands the hub can't run (adb forward, adb connect) go to the
                                           local adb client; 0 = refuse them with an error (default 1)
@@ -31,7 +32,7 @@ import shlex
 from pathlib import Path
 from typing import Optional
 
-from ..fleet_mirror_client import FleetMirrorClient, FleetMirrorError
+from ..fleet_mirror_client import FleetMirrorClient, FleetMirrorError, api_key_from_env
 
 
 class NotRouted(Exception):
@@ -60,9 +61,9 @@ async def client() -> FleetMirrorClient:
     loop = asyncio.get_running_loop()
     if _client is None or _client_loop is not loop:
         url = os.environ.get("FLEET_MIRROR_URL", "http://127.0.0.1:22301")
-        key = os.environ.get("FLEET_MIRROR_API_KEY", "")
+        key = api_key_from_env()
         if not key:
-            raise AdbRouteError("FLEET_MIRROR_ADB=1 but FLEET_MIRROR_API_KEY is not set")
+            raise AdbRouteError("FLEET_MIRROR_ADB=1 but no API key (FLEET_MIRROR_API_KEY_FILE or FLEET_MIRROR_API_KEY)")
         _client = FleetMirrorClient(url, api_key=key, cert_sha256=os.environ.get("FLEET_MIRROR_CERT_SHA256", ""))
         _client_loop = loop
     return _client
