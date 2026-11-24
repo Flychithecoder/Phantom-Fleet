@@ -44,11 +44,13 @@ With `FLEET_MIRROR_ADB` unset, the backend behaves exactly as before.
 
 ## Things to know
 
-- **Control.** Phone input (taps, swipes, text, installs, shell commands that change the phone) only
-  reaches phones the hub allows control on (hub config `control_enabled` + `control_serials`;
-  currently `"*"`, all phones). With `FLEET_MIRROR_ADB=1`, every agent and executor that runs adb
-  reaches every phone on every PC. Narrow `control_serials` on the hub if Phantom Fleet should only
-  drive some phones.
+- **Control.** The hub gives the Phantom Fleet API key its own device allowlist (Fleet Mirror →
+  More → Settings → *Local API (Phantom Fleet) → May control*). It is currently **R5CRC08L4QM,
+  R5CRC0GACCK, R5CRC10PTEV**. Input, shell, installs, file transfers, tasks and control embeds on any
+  other phone are refused with code 10004 and surface here as `ADBCommandFailed` / `FleetMirrorError`;
+  those phones stay visible (list, screenshots, view-only live screen). Widen the list in Fleet Mirror's
+  Settings when Phantom Fleet should drive more phones. With `FLEET_MIRROR_ADB=1`, executors aiming at
+  other phones get errors instead of acting.
 - **Timing.** The hub adds no randomness. Taps and swipes use exactly the points and delays Phantom
   Fleet computes (`FleetMirrorClient.swipe(points, durations_ms)`).
 - **Companion APK.** `adb forward tcp:… tcp:8090` only works for phones on this PC's adb server. Phones
