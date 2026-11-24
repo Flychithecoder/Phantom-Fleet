@@ -231,10 +231,12 @@ class FleetMirrorClient:
             await asyncio.sleep(every)
 
     # ---------------- live view ----------------
-    async def embed_url(self, devices: Devices, control: bool = False, minutes: float = 60, base: str = "") -> dict:
+    async def embed_url(self, devices: Devices, control: bool = False, minutes: float = 60, base: str = "",
+                        theme: str = "phantom") -> dict:
         """A single-use link (valid 2 minutes) for an <iframe>: the phone's live screen (and control if asked).
-        Mint a new one each time the page renders."""
-        data = {"control": control, "minutes": minutes}
+        Mint a new one each time the page renders. theme "phantom" = Phantom Fleet's look (dark, neon accent,
+        transparent page); "" = Fleet Mirror's own look."""
+        data = {"control": control, "minutes": minutes, "theme": theme}
         if base:
             data["base"] = base
         return await self.papi("embedLink", devices, data)

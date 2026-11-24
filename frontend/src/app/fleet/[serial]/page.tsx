@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FleetMirrorView from "@/components/FleetMirrorView";
+import { Panel } from "@/components/panel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -702,27 +703,45 @@ export default function DeviceManagePage({
           </div>
         )}
 
-        {/* Live screen from the Fleet Mirror hub (single-use embed link minted by the backend) */}
-        <div className="glass rounded-xl border border-white/10 p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium">Live screen</span>
-            <span className="text-xs text-white/40">via Fleet Mirror</span>
-            <span className="flex-1" />
-            {showMirror && (
-              <label className="text-xs text-white/60 flex items-center gap-1.5">
-                <input type="checkbox" checked={mirrorControl} onChange={(e) => setMirrorControl(e.target.checked)} />
-                allow control
-              </label>
-            )}
-            <button
-              onClick={() => setShowMirror((v) => !v)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30"
-            >
-              {showMirror ? "Hide" : "Show live screen"}
-            </button>
-          </div>
-          {showMirror && <FleetMirrorView key={`${serial}-${mirrorControl}`} serial={serial} control={mirrorControl} height={720} />}
-        </div>
+        {/* Live screen from the Fleet Mirror hub (one-time embed link minted by the backend) */}
+        <Panel
+          label="Live screen"
+          title={<span className="flex items-center gap-2">Fleet Mirror <span className={cn("phantom-dot", showMirror ? "phantom-dot-alive" : "phantom-dot-accent")} /></span>}
+          subtitle={showMirror
+            ? "Streaming this phone from the Fleet Mirror hub. View only unless control is allowed."
+            : "Watch this phone live from the Fleet Mirror hub, without touching its adb connection."}
+          actions={
+            <>
+              {showMirror && (
+                <label className="flex items-center gap-2.5 cursor-pointer select-none mr-1">
+                  <span
+                    role="switch"
+                    aria-checked={mirrorControl}
+                    onClick={() => setMirrorControl((v) => !v)}
+                    className={cn("w-9 h-5 rounded-full transition-colors relative shrink-0",
+                      mirrorControl ? "bg-phantom-accent" : "bg-phantom-border")}
+                  >
+                    <span className={cn("absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform",
+                      mirrorControl ? "translate-x-4" : "translate-x-0")} />
+                  </span>
+                  <span className="text-sm text-white">Allow control</span>
+                </label>
+              )}
+              <button
+                onClick={() => setShowMirror((v) => !v)}
+                className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                  showMirror
+                    ? "bg-phantom-panelHi text-white border-phantom-border hover:bg-phantom-panelHi/80"
+                    : "bg-phantom-accent/15 text-phantom-accent border-phantom-accent/30 hover:bg-phantom-accent/25")}
+              >
+                {showMirror ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
+                {showMirror ? "Hide" : "Show live screen"}
+              </button>
+            </>
+          }
+        >
+          {showMirror && <FleetMirrorView key={`${serial}-${mirrorControl}`} serial={serial} control={mirrorControl} height={760} />}
+        </Panel>
 
         {/* Hardware identity panel — mirror-provided, per CONTRACT.md §2 */}
         {device?.metadata && (

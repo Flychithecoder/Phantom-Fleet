@@ -42,12 +42,13 @@ async def fleet_mirror_status():
 
 
 @router.get("/embed")
-async def fleet_mirror_embed(serial: str = Query(...), control: int = 0, minutes: int = 60):
+async def fleet_mirror_embed(serial: str = Query(...), control: int = 0, minutes: int = 60, theme: str = "phantom"):
     if not _SERIAL.match(serial):
         raise HTTPException(400, "bad serial")
     try:
         async with _client() as fm:
-            r = await fm.embed_url(serial, control=bool(control), minutes=max(1, min(720, minutes)))
+            r = await fm.embed_url(serial, control=bool(control), minutes=max(1, min(720, minutes)),
+                                   theme="phantom" if theme == "phantom" else "")
     except FleetMirrorError as e:
         raise HTTPException(502, f"Fleet Mirror: {e.msg}")
     except OSError as e:
