@@ -61,7 +61,7 @@ async def client() -> FleetMirrorClient:
     loop = asyncio.get_running_loop()
     if _client is None or _client_loop is not loop:
         url = os.environ.get("FLEET_MIRROR_URL", "http://127.0.0.1:22301")
-        key = api_key_from_env()
+        key = api_key_from_env("FLEET_MIRROR_AGENTS") or api_key_from_env()   # automation uses the agents key
         if not key:
             raise AdbRouteError("FLEET_MIRROR_ADB=1 but no API key (FLEET_MIRROR_API_KEY_FILE or FLEET_MIRROR_API_KEY)")
         _client = FleetMirrorClient(url, api_key=key, cert_sha256=os.environ.get("FLEET_MIRROR_CERT_SHA256", ""))

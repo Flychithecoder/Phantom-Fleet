@@ -9,6 +9,7 @@ import {
   Globe, Wand2, Vault, Brain, RotateCcw, MessageSquare, Network, Bookmark,
   Film, ArrowRight, Server, MessageCircle, Repeat2, Zap, Newspaper,
   TrendingUp, FlaskConical, Video, Flame, Heart, ShieldCheck, Rocket,
+  MonitorSmartphone, KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,13 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/agents",    label: "Agents",         icon: Bot },
       { href: "/schedule",  label: "Schedule",       icon: CalendarDays },
       { href: "/calendar",  label: "Content Calendar", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Mirroring",
+    items: [
+      { href: "/mirroring",        label: "Phone Wall",    icon: MonitorSmartphone },
+      { href: "/mirroring/access", label: "Device Access", icon: KeyRound },
     ],
   },
   {
@@ -114,6 +122,10 @@ const NAV_SECTIONS: NavSection[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  // only the most specific matching item is active (e.g. /mirroring/access, not also /mirroring)
+  const matches = (h: string) => (h === "/" ? pathname === h : pathname === h || pathname.startsWith(h + "/"));
+  const bestHref = NAV_SECTIONS.flatMap((s) => s.items.map((i) => i.href)).filter(matches)
+    .sort((a, b) => b.length - a.length)[0];
   return (
     <aside className="w-[240px] shrink-0 border-r border-phantom-border bg-phantom-panel/40 backdrop-blur-xl sticky top-0 h-screen flex flex-col">
       {/* Brand */}
@@ -139,7 +151,7 @@ export function Sidebar() {
             </div>
             <ul className="space-y-0.5">
               {section.items.map(({ href, label, icon: Icon }) => {
-                const active = href === "/" ? pathname === href : pathname === href || pathname.startsWith(href + "/");
+                const active = href === bestHref;
                 return (
                   <li key={href}>
                     <Link

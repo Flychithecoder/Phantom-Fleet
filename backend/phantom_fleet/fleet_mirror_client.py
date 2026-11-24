@@ -37,14 +37,14 @@ import httpx
 Devices = str | Sequence[str]   # "all", one serial, or a list of serials
 
 
-def api_key_from_env() -> str:
-    """FLEET_MIRROR_API_KEY, or the contents of the file named by FLEET_MIRROR_API_KEY_FILE.
-    Prefer the file: keep the key out of .env files that are committed to git."""
+def api_key_from_env(prefix: str = "FLEET_MIRROR") -> str:
+    """<prefix>_API_KEY, or the contents of the file named by <prefix>_API_KEY_FILE (preferred: keep keys out
+    of .env files that are committed to git). prefix "FLEET_MIRROR" = the UI key, "FLEET_MIRROR_AGENTS" = agents."""
     import os
-    key = os.environ.get("FLEET_MIRROR_API_KEY", "").strip()
+    key = os.environ.get(f"{prefix}_API_KEY", "").strip()
     if key:
         return key
-    path = os.environ.get("FLEET_MIRROR_API_KEY_FILE", "").strip()
+    path = os.environ.get(f"{prefix}_API_KEY_FILE", "").strip()
     if path:
         try:
             return Path(path).read_text(encoding="utf-8").strip()
@@ -204,6 +204,29 @@ class FleetMirrorClient:
     async def stop_app(self, devices: Devices, package: str) -> list[dict]:
         return await self.papi("stopApk", devices, {"package": package})
 
+    async def pull_file(self, serial: str, path: str) -> bytes:
+        """A file from the phone (needs control of that phone): pull it, then fetch its bytes."""
+        rows = await self.papi("pullFile", serial, {"filePath": path, "timeout": 180})
+        row = rows[0] if rows else {}
+        if not row.get("ok") or not row.get("file"):
+            raise FleetMirrorError(10003, row.get("out") or "pull failed", "pullFile")
+        f = await self.papi("getFile", data={"file": row["file"]})
+        return base64.b64decode(f["base64"])
+
+    async def push_file(self, devices: Devices, local_path: str | Path, media: bool = False) -> dict[str, tuple[bool, str]]:
+        """Push a file to the phones' Download folder (media=True: DCIM/Camera, shows in the gallery)."""
+        fid = await self.upload(local_path)
+        rows = await self.papi("uploadFile", devices, {"file": fid, "name": Path(local_path).name, "isMedia": media, "timeout": 300})
+        return {r["serial"]: (bool(r.get("ok")), r.get("out", "")) for r in rows}
+
+    async def ui_dump(self, serial: str) -> str:
+        """The current screen's UI hierarchy (uiautomator XML): element text, ids and bounds."""
+        cmd = "uiautomator dump /sdcard/fm_ui.xml >/dev/null 2>&1; cat /sdcard/fm_ui.xml; rm -f /sdcard/fm_ui.xml"
+        ok, out = (await self.shell(serial, cmd, timeout=60)).get(serial, (False, ""))
+        if not ok or "<hierarchy" not in out:
+            raise FleetMirrorError(10003, out[:200] or "ui dump failed", "uiDump")
+        return out[out.index("<?xml") if "<?xml" in out else out.index("<hierarchy"):]
+
     async def screenshot(self, serial: str) -> bytes:
         rows = await self.papi("screen", serial, {"base64": True})
         row = rows[0] if rows else {}
@@ -256,3 +279,11 @@ class FleetMirrorClient:
         if base:
             data["base"] = base
         return await self.papi("embedLink", devices, data)
+
+    async def embed_wall(self, minutes: float = 480, theme: str = "phantom", base: str = "") -> dict:
+        """A single-use link (valid 2 minutes) to the WHOLE phone wall for an <iframe>, acting for this key:
+        every phone is visible, control only where this key may control. Mint a new one per page render."""
+        data = {"minutes": minutes, "theme": theme}
+        if base:
+            data["base"] = base
+        return await self.papi("embedWall", data=data)

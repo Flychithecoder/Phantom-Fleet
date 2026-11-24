@@ -21,6 +21,8 @@ FLEET_MIRROR_URL=https://192.168.1.16:22300          # or http://127.0.0.1:22301
 FLEET_MIRROR_API_KEY_FILE=C:\Users\admin\Projects\PhantomFleet\fleet-mirror\run\api-key.txt
 #   ^ a file holding the hub's API key, outside this repo: backend/.env is tracked in git, so never put the key in it.
 #   The mirror bridge sends the key as a header, so PHANTOM_MIRROR_URL needs no key in it.
+FLEET_MIRROR_AGENTS_API_KEY_FILE=C:\Users\admin\Projects\PhantomFleet\fleet-mirror\run\api-key-agents.txt
+#   ^ the hub's "agents" key: AI agents, automations and every adb command the backend runs use this one.
 FLEET_MIRROR_CERT_SHA256=EC:12:E7:D3:AC:FD:42:8F:2A:B0:6F:67:23:52:C0:7C:CF:47:9F:3B:4D:7F:05:CC:75:D8:07:82:32:91:8B:37
 FLEET_MIRROR_ADB=1                                   # 0 = old behaviour (local adb)
 FLEET_MIRROR_ADB_FALLBACK=0                          # adb forward/connect: 0 = refuse (recommended), 1 = local adb
@@ -62,3 +64,49 @@ With `FLEET_MIRROR_ADB` unset, the backend behaves exactly as before.
 - **Push.** `adb push` is staged through `/sdcard/Download` and then moved to the target folder on
   the phone.
 - The unused `phantom_fleet/phones/__init__.py` helper (Onimator adb path) is unchanged.
+
+
+## Two keys: people and agents
+
+The hub has two keys, each with its own "may control" list (Fleet Mirror → More → Settings → Local API keys):
+
+| Key | Used by | File setting |
+|---|---|---|
+| `ui` | People: the Phone Wall, Live screen panels, buttons on Phantom Fleet's pages | `FLEET_MIRROR_API_KEY_FILE` |
+| `agents` | AI agents (`agents/device_tools.py`), automations, every adb command the backend runs | `FLEET_MIRROR_AGENTS_API_KEY_FILE` |
+
+Phones outside a key's list are view-only for it: live screen, screenshots and lists work. Input, shell,
+installs, file transfers and tasks are refused with code 10004. Both lists currently hold the 3 test phones.
+The Mirroring → Device Access page shows both lists.
+
+## Mirroring section
+
+- **Phone Wall** (`/mirroring`): the whole Fleet Mirror wall inside Phantom Fleet, in Phantom Fleet's
+  style. It covers every phone on every host PC: tiles, large view, control, drag-select, sync, batch
+  tools, sliders, tabs, tags and dialogs.
+  - It opens with a one-time link minted by the backend (`GET /api/fleet-mirror/embed-wall`, `ui` key);
+    the session lasts 8 hours.
+  - Control works only on the `ui` key's phones.
+  - Hub administration isn't available here: keys, Add PC, sharing, adb restart, removing phones.
+  - It has Full screen and Reconnect buttons.
+- **Device Access** (`/mirroring/access`): which phones people and agents may control
+  (`GET /api/fleet-mirror/access`), plus the list of agent device tools.
+
+## Agent device tools (`agents/device_tools.py`)
+
+`build_device_tool_registry()` returns 21 keyword-only async tools, using the `agents` key:
+
+- `device.list`
+- `device.screenshot`, `device.ui_dump`, `device.screen_size`
+- `device.tap`, `device.swipe`, `device.long_press`, `device.key`, `device.text`
+- `device.clipboard_set`, `device.clipboard_get`
+- `device.shell`, `device.apps`
+- `device.app_install`, `device.app_start`, `device.app_stop`
+- `device.file_push`, `device.file_pull`
+- `device.task_run`, `device.task_status`, `device.task_stop`
+
+Add the ones an agent needs to its `AgentConfig.allowed_tools`; `DEVICE_TOOLS` lists them all. For LLM tool
+use, `llm_tool_specs()` gives name, description and JSON schema for each tool (`device_tap`, ...), and
+`call_llm_tool(name, args)` runs one and returns errors as `{"error", "code"}`.
+
+The hub adds no randomness: swipe and tap timing comes from the agent (use `core.distributions`).

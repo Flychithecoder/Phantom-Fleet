@@ -54,3 +54,38 @@ async def fleet_mirror_embed(serial: str = Query(...), control: int = 0, minutes
     except OSError as e:
         raise HTTPException(502, f"Fleet Mirror unreachable: {e}")
     return {"url": r["url"], "expires": r["ticket_expires"], "perm": r["perm"]}
+
+
+@router.get("/embed-wall")
+async def fleet_mirror_embed_wall(minutes: int = 480):
+    """One-time link (2 min) to the whole Fleet Mirror wall in Phantom Fleet's style, acting for the UI key:
+    every phone visible, control only on the phones that key may control."""
+    try:
+        async with _client() as fm:
+            r = await fm.embed_wall(minutes=max(5, min(1440, minutes)), theme="phantom")
+    except FleetMirrorError as e:
+        raise HTTPException(502, f"Fleet Mirror: {e.msg}")
+    except OSError as e:
+        raise HTTPException(502, f"Fleet Mirror unreachable: {e}")
+    return {"url": r["url"], "expires": r["ticket_expires"], "session_expires": r["session_expires"]}
+
+
+@router.get("/access")
+async def fleet_mirror_access():
+    """Which phones Phantom Fleet's screens (UI key) and its agents (agents key) may control."""
+    from ...fleet_mirror_client import api_key_from_env as _k
+    out = {}
+    for role, prefix in (("ui", "FLEET_MIRROR"), ("agents", "FLEET_MIRROR_AGENTS")):
+        key = _k(prefix)
+        if not key:
+            out[role] = {"configured": False}
+            continue
+        try:
+            async with FleetMirrorClient(os.environ.get("FLEET_MIRROR_URL", "http://127.0.0.1:22301"), api_key=key,
+                                         cert_sha256=os.environ.get("FLEET_MIRROR_CERT_SHA256", ""), timeout=20) as fm:
+                rows = await fm.list_devices()
+            out[role] = {"configured": True, "phones": len(rows),
+                         "may_control": sorted(p["serial"] for p in rows if p.get("api_control"))}
+        except (FleetMirrorError, OSError) as e:
+            out[role] = {"configured": True, "error": str(e)}
+    return out
