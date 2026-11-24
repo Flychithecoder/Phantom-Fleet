@@ -1,15 +1,30 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Search, Bell, Command } from "lucide-react";
 
 export function TopBar() {
+  // live phone count (every host PC, via the Fleet Mirror hub); null until loaded / backend down
+  const [online, setOnline] = useState<number | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/fleet", { cache: "no-store" });
+        if (r.ok) { const d = await r.json(); if (!stop && typeof d.online === "number") setOnline(d.online); }
+      } catch { /* backend down: keep the last value */ }
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(t); };
+  }, []);
   return (
     <header className="h-16 border-b border-phantom-border bg-phantom-panel/40 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-8">
       {/* Left — live fleet stats ticker */}
       <div className="flex items-center gap-6 text-xs">
         <div className="flex items-center gap-2">
           <span className="phantom-dot phantom-dot-alive" />
-          <span className="text-phantom-ghost">19 phones</span>
+          <span className="text-phantom-ghost">{online ?? 19} phones</span>
           <span className="text-white font-medium">online</span>
         </div>
         <div className="hidden md:flex items-center gap-2">

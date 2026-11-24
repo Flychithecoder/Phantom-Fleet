@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 type PhoneState = "active" | "idle" | "warming" | "cooldown" | "recovery" | "offline";
@@ -61,7 +63,32 @@ const STATE_DOTS: Record<PhoneState, string> = {
   offline: "phantom-dot-critical",
 };
 
+type ApiPhone = { serial: string; state?: string; clone_count?: number; metadata?: { model?: string; host?: string; name?: string } };
+
+function fromApi(p: ApiPhone): Phone & { model?: string } {
+  const st = String(p.state || "").toLowerCase();
+  return {
+    serial: p.serial,
+    persona: p.metadata?.name || p.metadata?.model || "",
+    state: st === "offline" || st === "error" ? "offline" : st === "busy" ? "active" : "idle",
+    accountCount: p.clone_count ?? 0,
+    actionsToday: 0,
+  };
+}
+
 export function FleetGrid() {
+  // real devices from the backend (every host PC through the Fleet Mirror hub); demo tiles only if it is down
+  const [live, setLive] = useState<Phone[] | null>(null);
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/fleet", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!stop && d && Array.isArray(d.phones) && d.phones.length) setLive(d.phones.map(fromApi)); })
+      .catch(() => {});
+    return () => { stop = true; };
+  }, []);
+  const phones = live ?? DEMO_PHONES;
+  const accounts = phones.reduce((n, p) => n + p.accountCount, 0);
   return (
     <div className="phantom-panel p-6">
       <div className="flex items-center justify-between mb-5">
@@ -70,7 +97,7 @@ export function FleetGrid() {
             Fleet map
           </div>
           <div className="text-lg font-display font-semibold mt-1">
-            19 devices · 219 accounts · all phones simultaneous
+            {live ? `${phones.length} devices · ${accounts} accounts · live from Fleet Mirror` : "19 devices · 219 accounts · all phones simultaneous"}
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs text-phantom-ghost">
@@ -94,10 +121,11 @@ export function FleetGrid() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {DEMO_PHONES.map((p) => (
-          <div
+        {phones.map((p) => (
+          <Link
+            href={`/fleet/${encodeURIComponent(p.serial)}`}
             key={p.serial}
-            className={cn(
+            className={cn("block",
               "p-3 rounded-lg border transition-all cursor-pointer hover:scale-[1.02] hover:brightness-110",
               STATE_STYLES[p.state]
             )}
@@ -120,7 +148,7 @@ export function FleetGrid() {
               <span className="text-xs font-mono tabular-nums text-phantom-accent">{p.actionsToday}</span>
               <span className="text-[9px] text-phantom-ghost">actions today</span>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>
