@@ -103,7 +103,8 @@ function LiveActivityFeed() {
   useEffect(() => {
     function connectWs() {
       try {
-        const ws = new WebSocket("ws://localhost:8001/ws/fleet");
+        const wsBase = process.env.NEXT_PUBLIC_WS_URL || `ws://${window.location.hostname}:8000/ws`;
+        const ws = new WebSocket(`${wsBase}/fleet`);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -222,7 +223,7 @@ function LiveActivityFeed() {
           </div>
         ))}
         <div className="ml-auto text-[10px] font-mono text-phantom-ghost">
-          {isLive ? "ws://localhost:8001/ws/fleet" : "demo mode · WebSocket offline"}
+          {isLive ? "/ws/fleet" : "demo mode · WebSocket offline"}
         </div>
       </div>
     </Panel>

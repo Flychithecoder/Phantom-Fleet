@@ -48,7 +48,7 @@ type VaultStats = {
   total_file_size_bytes: number;
 };
 
-const API = "http://localhost:8001";
+const API = "";
 
 const PLATFORM_OPTIONS = ["instagram", "threads", "tiktok", "x", "reddit"];
 const SOURCE_LABELS: Record<string, string> = {

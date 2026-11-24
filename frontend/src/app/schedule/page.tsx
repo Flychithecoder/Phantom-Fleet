@@ -137,7 +137,7 @@ export default function SchedulePage() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await fetch("http://localhost:8001/api/schedule/generate", {
+      await fetch("/api/schedule/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preset: dayPreset }),

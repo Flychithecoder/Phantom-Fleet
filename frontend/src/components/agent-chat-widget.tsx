@@ -71,7 +71,7 @@ export function AgentChatWidget() {
 
     try {
       const history = messages.map((m) => ({ role: m.role, text: m.text }));
-      const res = await fetch("http://localhost:8001/api/v1/agents/chat", {
+      const res = await fetch("/api/v1/agents/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent, message: text, history }),

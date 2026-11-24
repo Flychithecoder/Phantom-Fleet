@@ -326,7 +326,7 @@ function OverviewTab({ settings, serial, onSave }: { settings: AccountSettings; 
   const handleDetect = async () => {
     setDetecting(true); setDetectMsg("");
     try {
-      const res = await fetch(`http://localhost:8001/api/accounts/${local.id}/detect-clone`, {
+      const res = await fetch(`/api/accounts/${local.id}/detect-clone`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone_serial: serial }),
       });
@@ -339,19 +339,19 @@ function OverviewTab({ settings, serial, onSave }: { settings: AccountSettings; 
 
   const handleLogin = async () => {
     setLoggingIn(true);
-    try { await fetch(`http://localhost:8001/api/accounts/${local.id}/login`, { method: "POST" }); set({ loggedIn: true }); }
+    try { await fetch(`/api/accounts/${local.id}/login`, { method: "POST" }); set({ loggedIn: true }); }
     catch { } finally { setLoggingIn(false); }
   };
 
   const handleLogout = async () => {
-    try { await fetch(`http://localhost:8001/api/accounts/${local.id}/logout`, { method: "POST" }); set({ loggedIn: false }); }
+    try { await fetch(`/api/accounts/${local.id}/logout`, { method: "POST" }); set({ loggedIn: false }); }
     catch { }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+      await fetch(`/api/accounts/${local.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clone_package: local.clonePackage, tags: local.tags }),
       });
@@ -494,7 +494,7 @@ function TimerTab({ settings, onSave }: { settings: AccountSettings; onSave: (s:
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         start_hour: local.startHour, end_hour: local.endHour,
@@ -564,7 +564,7 @@ function FollowTab({ settings, onSave }: { settings: AccountSettings; onSave: (s
   const handleScrape = async () => {
     setScraping(true); setScrapeMsg("");
     try {
-      const res = await fetch(`http://localhost:8001/api/accounts/${local.id}/scrape-follow-source`, {
+      const res = await fetch(`/api/accounts/${local.id}/scrape-follow-source`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: local.followSource }),
       });
@@ -576,7 +576,7 @@ function FollowTab({ settings, onSave }: { settings: AccountSettings; onSave: (s
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         follow_enabled: local.followEnabled, follow_daily_max: local.followDailyMax,
@@ -711,7 +711,7 @@ function UnfollowTab({ settings, onSave }: { settings: AccountSettings; onSave: 
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         unfollow_enabled: local.unfollowEnabled, unfollow_daily_max: local.unfollowDailyMax,
@@ -779,7 +779,7 @@ function LikeTab({ settings, onSave }: { settings: AccountSettings; onSave: (s: 
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         like_enabled: local.likeEnabled, like_daily_max: local.likeDailyMax,
@@ -866,7 +866,7 @@ function CommentTab({ settings, onSave }: { settings: AccountSettings; onSave: (
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         comment_enabled: local.commentEnabled, comment_daily_max: local.commentDailyMax,
@@ -962,7 +962,7 @@ function StoryTab({ settings, onSave }: { settings: AccountSettings; onSave: (s:
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         story_enabled: local.storyEnabled, story_daily_max: local.storyDailyMax,
@@ -1024,7 +1024,7 @@ function DMTab({ settings, onSave }: { settings: AccountSettings; onSave: (s: Ac
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dm_enabled: local.dmEnabled, dm_daily_max: local.dmDailyMax,
@@ -1125,7 +1125,7 @@ function TargetsTab({ accountId }: { accountId: string }) {
     if (!raw) return;
     const entry: TargetEntry = { id: `t_${Date.now()}`, username: `@${raw}`, source: "manual", addedAt: new Date().toISOString().slice(0, 10) };
     setTargets((p) => [...p, entry]);
-    fetch(`http://localhost:8001/api/accounts/${accountId}/targets`, {
+    fetch(`/api/accounts/${accountId}/targets`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: raw }),
     }).catch(() => {});
@@ -1134,13 +1134,13 @@ function TargetsTab({ accountId }: { accountId: string }) {
 
   const removeTarget = (id: string) => {
     setTargets((p) => p.filter((t) => t.id !== id));
-    fetch(`http://localhost:8001/api/accounts/${accountId}/targets/${id}`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/accounts/${accountId}/targets/${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   const handleAIScrape = async () => {
     setScraping(true); setScrapeMsg("");
     try {
-      const res = await fetch(`http://localhost:8001/api/accounts/${accountId}/targets/ai-scrape`, {
+      const res = await fetch(`/api/accounts/${accountId}/targets/ai-scrape`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ niches, min_followers: minFollowers, max_followers: maxFollowers, count: 50 }),
       });
@@ -1241,7 +1241,7 @@ function TargetsTab({ accountId }: { accountId: string }) {
                   return [...p, ...newEntries.filter((e) => !existing.has(e.username))];
                 });
                 newEntries.forEach((e) => {
-                  fetch(`http://localhost:8001/api/accounts/${accountId}/targets`, {
+                  fetch(`/api/accounts/${accountId}/targets`, {
                     method: "POST", headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ username: e.username.replace(/^@/, "") }),
                   }).catch(() => {});
@@ -1309,7 +1309,7 @@ function PostTab({ settings, onSave }: { settings: AccountSettings; onSave: (s: 
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         post_enabled: local.postEnabled, post_source: local.postSource,
@@ -1411,7 +1411,7 @@ function ReelsTab({ settings, onSave }: { settings: AccountSettings; onSave: (s:
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+    await fetch(`/api/accounts/${local.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         reels_watch_enabled: local.reelsWatchEnabled, reels_watch_source: local.reelsWatchSource,
@@ -1551,7 +1551,7 @@ function ThreadsTab({ settings, onSave }: { settings: AccountSettings; onSave: (
     setSaving(true);
     onSave(local);
     try {
-      await fetch(`http://localhost:8001/api/accounts/${local.id}`, {
+      await fetch(`/api/accounts/${local.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threads_config: { threadsEnabled, followEnabled, followMinOp, followMaxOp, followDailyMax, unfollowEnabled, unfollowMinOp, unfollowMaxOp, unfollowDailyMax, likeEnabled, likeSource, likeHashtags, likeDailyMax, replyEnabled, replySource, replyTemplates, replyAI, replyDailyMax, repostEnabled, repostSource, repostDailyMax, quoteEnabled, quoteTemplates, postEnabled, postTemplates, postPerDay, postAI, timeSlot } }),
@@ -1789,7 +1789,7 @@ export default function AccountSettingsPage({
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   useEffect(() => {
-    fetch(`http://localhost:8001/api/accounts/${account_id}`)
+    fetch(`/api/accounts/${account_id}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => { if (d?.id) setSettings(d); })
       .catch(() => {});

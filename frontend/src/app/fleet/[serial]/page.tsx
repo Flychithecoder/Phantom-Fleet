@@ -13,6 +13,46 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type DeviceDetail = {
+  serial: string;
+  state: string;
+  proxy_host: string;
+  proxy_port: number;
+  clone_count: number;
+  last_error: string | null;
+  metadata: {
+    model?: string;
+    android_version?: string;
+    build_id?: string;
+    wifi_ip?: string;
+    connection?: "usb" | "wifi";
+    battery_pct?: number;
+    screen_on?: boolean;
+    mirror_slot?: number;
+    hw?: {
+      manufacturer?: string;
+      fingerprint?: string;
+      advertising_id?: string;
+      android_id?: string;
+      gsf_id?: string;
+      wifi_mac?: string;
+      bluetooth_mac?: string;
+      spoofed?: boolean;
+    };
+  };
+};
+
+type DeviceCollision = {
+  // The dotted field path from the cluster check, e.g. "hw.android_id".
+  field: string;
+  value: string;
+  // Other serials sharing the same value (this phone's serial excluded).
+  sharedWith: string[];
+  severity: "critical" | "high";
+  // For model_x_android_version violations only.
+  pairValidRange?: string[];
+};
+
 type AccountState = "RUNNING" | "PAUSED" | "BLOCKED" | "OFFLINE" | "WARMUP";
 
 type AccountRow = {
@@ -113,7 +153,7 @@ function AddAccountModal({
     setSaving(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:8001/api/accounts`, {
+      const res = await fetch(`/api/accounts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -293,6 +333,8 @@ export default function DeviceManagePage({
 }) {
   const { serial } = use(params);
   const [accounts, setAccounts]     = useState<AccountRow[]>(DEMO_ACCOUNTS);
+  const [device, setDevice]         = useState<DeviceDetail | null>(null);
+  const [myCollisions, setMyCollisions] = useState<DeviceCollision[]>([]);
   const [backendDown, setBackendDown] = useState(false);
   const [verifying, setVerifying]   = useState(false);
   const [syncing, setSyncing]       = useState(false);
@@ -311,7 +353,7 @@ export default function DeviceManagePage({
 
   const fetchAccounts = (showLoader = false) => {
     if (showLoader) setSyncing(true);
-    fetch(`http://localhost:8001/api/fleet/${serial}/accounts`)
+    fetch(`/api/fleet/${serial}/accounts`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => {
         if (d?.accounts?.length) {
@@ -344,6 +386,59 @@ export default function DeviceManagePage({
 
   useEffect(() => { fetchAccounts(); }, [serial]);
 
+  useEffect(() => {
+    fetch(`/api/fleet/${serial}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d: DeviceDetail) => setDevice(d))
+      .catch(() => {});
+  }, [serial]);
+
+  useEffect(() => {
+    // Pull the fleet-wide collision audit and keep only the rows that touch
+    // this serial. Lets the identity panel highlight exactly which fields
+    // collide and which other phones share each value.
+    const load = () => {
+      fetch("/api/fleet/cluster/collisions")
+        .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+        .then((d: {
+          collisions: { field: string; value: string; serials: string[]; severity: "critical" | "high" }[];
+          pair_violations: { serial: string; model: string; android_version: string; valid_range: string[] }[];
+        }) => {
+          const mine: DeviceCollision[] = [];
+          for (const col of d.collisions) {
+            const hit = col.serials.find((s) => s.split(":")[0] === serial);
+            if (!hit) continue;
+            mine.push({
+              field: col.field,
+              value: col.value,
+              sharedWith: col.serials.map((s) => s.split(":")[0]).filter((s) => s !== serial),
+              severity: col.severity,
+            });
+          }
+          for (const v of d.pair_violations) {
+            if (v.serial === serial) {
+              mine.push({
+                field: "model ↔ android_version",
+                value: `${v.model} on Android ${v.android_version}`,
+                sharedWith: [],
+                severity: "high",
+                pairValidRange: v.valid_range,
+              });
+            }
+          }
+          setMyCollisions(mine);
+        })
+        .catch(() => setMyCollisions([]));
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, [serial]);
+
+  const releaseAdb = async () => {
+    try { await fetch(`/api/fleet/${serial}/adb/release`, { method: "POST" }); } catch {}
+  };
+
   const safeAccounts = accounts.map((a) => ({
     ...a,
     today: a && typeof a === "object" && a.today && typeof a.today === "object"
@@ -366,7 +461,7 @@ export default function DeviceManagePage({
     const apiStatus = newState === "RUNNING" ? "active" : "paused";
     // Optimistic update
     setAccounts((p) => p.map((a) => a.id === id ? { ...a, state: newState, toggling: true } : a));
-    await fetch(`http://localhost:8001/api/accounts/${id}`, {
+    await fetch(`/api/accounts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: apiStatus }),
@@ -380,7 +475,7 @@ export default function DeviceManagePage({
     setAccounts((p) => p.map((a) => ({ ...a, state: newState, toggling: true })));
     await Promise.allSettled(
       safeAccounts.map((a) =>
-        fetch(`http://localhost:8001/api/accounts/${a.id}`, {
+        fetch(`/api/accounts/${a.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: apiStatus }),
@@ -393,7 +488,7 @@ export default function DeviceManagePage({
   const handleDelete = (id: string) => {
     if (!confirm("Remove this account from the device?")) return;
     setAccounts((p) => p.filter((a) => a.id !== id));
-    fetch(`http://localhost:8001/api/accounts/${id}`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/accounts/${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   // ── Bulk selection ──────────────────────────────────────────────────────────
@@ -412,7 +507,7 @@ export default function DeviceManagePage({
     const apiStatus = newState === "RUNNING" ? "active" : "paused";
     setAccounts((p) => p.map((a) => selectedIds.has(a.id) ? { ...a, state: newState } : a));
     await Promise.allSettled(ids.map((id) =>
-      fetch(`http://localhost:8001/api/accounts/${id}`, {
+      fetch(`/api/accounts/${id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: apiStatus }),
       })
@@ -424,7 +519,7 @@ export default function DeviceManagePage({
     if (!confirm(`Remove ${selectedIds.size} selected accounts?`)) return;
     const ids = Array.from(selectedIds);
     setAccounts((p) => p.filter((a) => !selectedIds.has(a.id)));
-    ids.forEach((id) => fetch(`http://localhost:8001/api/accounts/${id}`, { method: "DELETE" }).catch(() => {}));
+    ids.forEach((id) => fetch(`/api/accounts/${id}`, { method: "DELETE" }).catch(() => {}));
     setSelectedIds(new Set());
   };
 
@@ -487,7 +582,7 @@ export default function DeviceManagePage({
       today: { follows: 0, unfollows: 0, likes: 0, stories: 0, comments: 0, dms: 0 },
     };
     setAccounts((p) => [...p, cloned]);
-    fetch(`http://localhost:8001/api/accounts/${id}/clone`, { method: "POST" }).catch(() => {});
+    fetch(`/api/accounts/${id}/clone`, { method: "POST" }).catch(() => {});
   };
 
   return (
@@ -519,14 +614,34 @@ export default function DeviceManagePage({
                 {accounts.length}
               </span>
             </h1>
-            <div className="flex items-center gap-2.5 mt-1.5 text-xs text-phantom-ghost">
+            <div className="flex items-center gap-2.5 mt-1.5 text-xs text-phantom-ghost flex-wrap">
               <span className="font-mono">{serial}</span>
               <span>·</span>
-              <span>Samsung Galaxy S10 Lite</span>
+              <span>{device?.metadata?.model ?? "Samsung Galaxy phone"}</span>
+              {device?.metadata?.android_version && (
+                <>
+                  <span>·</span>
+                  <span>Android {device.metadata.android_version}</span>
+                </>
+              )}
               <span>·</span>
-              <span className="flex items-center gap-1 text-green-400">
-                <Wifi className="w-3 h-3" /> Connected
-              </span>
+              {device?.state === "online" ? (
+                <span className="flex items-center gap-1 text-green-400">
+                  <Wifi className="w-3 h-3" /> {device?.metadata?.connection === "wifi" ? "WiFi ADB" : "Connected"}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-phantom-amber">
+                  <WifiOff className="w-3 h-3" /> {device?.state ?? "offline"}
+                </span>
+              )}
+              {device?.metadata?.hw?.spoofed && (
+                <>
+                  <span>·</span>
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-phantom-amber/30 text-phantom-amber bg-phantom-amber/10">
+                    STUB
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -547,7 +662,7 @@ export default function DeviceManagePage({
               Pause All
             </button>
             <button
-              onClick={() => { setVerifying(true); fetch(`http://localhost:8001/api/fleet/${serial}/verify-proxy`, { method: "POST" }).catch(() => {}); setTimeout(() => setVerifying(false), 2000); }}
+              onClick={() => { setVerifying(true); fetch(`/api/fleet/${serial}/verify-proxy`, { method: "POST" }).catch(() => {}); setTimeout(() => setVerifying(false), 2000); }}
               disabled={verifying}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border bg-phantom-accent/15 text-phantom-accent border-phantom-accent/30 hover:bg-phantom-accent/25 disabled:opacity-60 transition-colors">
               <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
@@ -581,6 +696,88 @@ export default function DeviceManagePage({
           <div className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-lg flex items-center justify-between">
             {importError}
             <button onClick={() => setImportError("")} className="text-red-400/60 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
+
+        {/* Hardware identity panel — mirror-provided, per CONTRACT.md §2 */}
+        {device?.metadata && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <HwTile label="Model" value={device.metadata.model ?? "—"} mono />
+            <HwTile label="Android" value={device.metadata.android_version ?? "—"} />
+            <HwTile label="Build" value={device.metadata.build_id ?? "—"} mono small />
+            <HwTile label="WiFi IP" value={device.metadata.wifi_ip ?? "—"} mono />
+            <HwTile
+              label="Battery"
+              value={device.metadata.battery_pct != null ? `${device.metadata.battery_pct}%` : "—"}
+              tone={
+                device.metadata.battery_pct == null ? undefined :
+                device.metadata.battery_pct < 20 ? "red" :
+                device.metadata.battery_pct < 40 ? "amber" : "accent"
+              }
+            />
+            <HwTile
+              label="Screen"
+              value={device.metadata.screen_on == null ? "—" : device.metadata.screen_on ? "On" : "Off"}
+              tone={device.metadata.screen_on ? "accent" : undefined}
+            />
+          </div>
+        )}
+
+        {/* Per-device collision summary */}
+        {myCollisions.length > 0 && (
+          <div className="phantom-panel p-4 border border-red-500/40 bg-red-500/5">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4 h-4 text-red-400" strokeWidth={1.75} />
+              <span className="text-sm font-semibold text-red-400">
+                {myCollisions.length} identity collision{myCollisions.length === 1 ? "" : "s"} on this phone
+              </span>
+              <span className="text-[10px] font-mono text-red-400/80 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 uppercase">
+                Cluster alert
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {myCollisions.map((c, i) => (
+                <div key={i} className="text-xs font-mono text-red-300/90 bg-red-500/5 border border-red-500/20 rounded px-2.5 py-1.5 flex items-center gap-2">
+                  <span className="text-red-400 font-semibold">{c.field}</span>
+                  <span className="text-phantom-ghost truncate" title={c.value}>= {c.value.slice(0, 32)}</span>
+                  {c.sharedWith.length > 0 ? (
+                    <span className="ml-auto text-phantom-ghost text-[11px]">
+                      shared with {c.sharedWith.slice(0, 2).join(", ")}{c.sharedWith.length > 2 ? ` +${c.sharedWith.length - 2}` : ""}
+                    </span>
+                  ) : c.pairValidRange ? (
+                    <span className="ml-auto text-phantom-ghost text-[11px]">
+                      valid: {c.pairValidRange.join(", ")}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fingerprint identity — hard rule §8, uniqueness per device */}
+        {device?.metadata?.hw && (
+          <div className="phantom-panel p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-phantom-ghost font-medium">
+                Device identity
+              </div>
+              <button
+                onClick={releaseAdb}
+                className="text-[10px] font-mono text-phantom-ghost hover:text-white px-2 py-1 border border-phantom-border rounded-md hover:bg-phantom-panelHi transition-colors"
+                title="Release USB handle back to the mirror"
+              >
+                Release ADB → Mirror
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs font-mono">
+              <IdRow label="build.fingerprint" value={device.metadata.hw.fingerprint} colliding={fieldColliding("hw.fingerprint", myCollisions)} />
+              <IdRow label="android_id"        value={device.metadata.hw.android_id}   colliding={fieldColliding("hw.android_id", myCollisions)} />
+              <IdRow label="gsf_id"            value={device.metadata.hw.gsf_id}       colliding={fieldColliding("hw.gsf_id", myCollisions)} />
+              <IdRow label="advertising_id"    value={device.metadata.hw.advertising_id} colliding={fieldColliding("hw.advertising_id", myCollisions)} />
+              <IdRow label="wifi_mac"          value={device.metadata.hw.wifi_mac}     colliding={fieldColliding("hw.wifi_mac", myCollisions)} />
+              <IdRow label="bluetooth_mac"     value={device.metadata.hw.bluetooth_mac} colliding={fieldColliding("hw.bluetooth_mac", myCollisions)} />
+            </div>
           </div>
         )}
 
@@ -737,5 +934,104 @@ export default function DeviceManagePage({
 
       </div>
     </>
+  );
+}
+
+// ─── HW identity tiles ──────────────────────────────────────────────────────
+
+function HwTile({
+  label, value, mono, small, tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  small?: boolean;
+  tone?: "accent" | "amber" | "red";
+}) {
+  const toneClass =
+    tone === "red" ? "text-red-400" :
+    tone === "amber" ? "text-phantom-amber" :
+    tone === "accent" ? "text-phantom-accent" :
+    "text-white";
+  return (
+    <div className="bg-phantom-panelHi border border-phantom-border rounded-lg p-3">
+      <div className="text-[9px] uppercase tracking-[0.12em] text-phantom-ghost font-medium">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "font-semibold mt-1 tabular-nums",
+          mono && "font-mono",
+          small ? "text-[11px]" : "text-sm",
+          toneClass,
+          "truncate",
+        )}
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function fieldColliding(field: string, collisions: DeviceCollision[]): boolean {
+  return collisions.some((c) => c.field === field);
+}
+
+function IdRow({
+  label, value, colliding = false,
+}: {
+  label: string;
+  value: string | undefined;
+  colliding?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!value) {
+    return (
+      <div className="flex items-center gap-2 py-1.5 border-b border-phantom-border/20">
+        <span className="text-phantom-ghost w-32 shrink-0">{label}</span>
+        <span className="text-phantom-ghost/40">—</span>
+      </div>
+    );
+  }
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    });
+  };
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 py-1.5 border-b border-phantom-border/20 group",
+        colliding && "bg-red-500/5 border-red-500/30 rounded px-2 -mx-2",
+      )}
+    >
+      <span className={cn(
+        "w-32 shrink-0",
+        colliding ? "text-red-400 font-semibold" : "text-phantom-ghost",
+      )}>
+        {label}
+      </span>
+      <span
+        className={cn("truncate flex-1", colliding ? "text-red-300" : "text-white")}
+        title={value}
+      >
+        {value}
+      </span>
+      {colliding && (
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-red-400 px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10">
+          Collision
+        </span>
+      )}
+      <button
+        onClick={copy}
+        className="opacity-0 group-hover:opacity-100 text-phantom-ghost hover:text-phantom-accent transition-opacity"
+        title="Copy"
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+      {copied && <span className="text-[10px] text-phantom-accent">copied</span>}
+    </div>
   );
 }

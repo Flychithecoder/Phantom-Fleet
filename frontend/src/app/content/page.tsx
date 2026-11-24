@@ -1,17 +1,58 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { Panel } from "@/components/panel";
 import { Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const CONTENT_ITEMS = Array.from({ length: 12 }, (_, i) => ({
+type ContentItem = {
+  id: string;
+  type: "reel" | "story" | "post";
+  persona: string;
+  score: number;
+  used: boolean;
+  views: number;
+};
+
+// Deterministic fallback — no Math.random() (CLAUDE.md distribution discipline).
+// Real values come from GET /api/content-vault; this seeds the page before the
+// fetch returns and anchors the empty-backend state.
+const FALLBACK_ITEMS: ContentItem[] = Array.from({ length: 12 }, (_, i) => ({
   id: `c${i}`,
-  type: i % 3 === 0 ? "reel" : i % 3 === 1 ? "story" : "post",
+  type: (i % 3 === 0 ? "reel" : i % 3 === 1 ? "story" : "post") as ContentItem["type"],
   persona: i % 2 === 0 ? "Tatiana" : "Melodie",
-  score: 0.6 + Math.random() * 0.4,
+  // Deterministic score: 0.62..0.98 via a fixed hash on index
+  score: 0.62 + ((i * 37) % 36) / 100,
   used: i < 4,
-  views: Math.round(Math.random() * 5000 + 500),
+  // Deterministic views: index-derived, no Math.random
+  views: 500 + ((i * 419) % 50) * 100,
 }));
 
 export default function ContentPage() {
+  const [items, setItems] = useState<ContentItem[]>(FALLBACK_ITEMS);
+  const [pending, setPending] = useState<number>(47);
+  const [weekly, setWeekly] = useState<number>(12);
+
+  useEffect(() => {
+    fetch("/api/content-vault/items?limit=12")
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d) => {
+        if (d?.items?.length) {
+          setItems(d.items.map((raw: Record<string, unknown>) => ({
+            id: String(raw.id ?? raw.content_id ?? ""),
+            type: (raw.type as ContentItem["type"]) ?? "post",
+            persona: String(raw.persona ?? "—"),
+            score: Number(raw.score ?? raw.fit_score ?? 0),
+            used: Boolean(raw.used ?? false),
+            views: Number(raw.views ?? 0),
+          })));
+        }
+        if (typeof d?.pending === "number") setPending(d.pending);
+        if (typeof d?.this_week === "number") setWeekly(d.this_week);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-8">
       <div>
@@ -30,10 +71,10 @@ export default function ContentPage() {
 
       <Panel
         label="vault queue"
-        title="47 items pending · 12 items this week"
+        title={`${pending} items pending · ${weekly} items this week`}
       >
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {CONTENT_ITEMS.map((c) => (
+          {items.map((c) => (
             <div key={c.id} className="phantom-panel-hi rounded-lg overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform">
               <div className="aspect-[9/16] bg-gradient-to-br from-phantom-magenta/20 via-phantom-accent/10 to-transparent flex items-center justify-center relative">
                 <ImageIcon className="w-10 h-10 text-phantom-ghost/30" strokeWidth={1.2} />

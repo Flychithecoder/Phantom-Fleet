@@ -16,6 +16,33 @@ type PhoneRow = {
   wifi_ip?: string;
 };
 
+type Collision = {
+  kind: "identity_collision" | "clone_cert_collision";
+  field: string;
+  value: string;
+  serials: string[];
+  severity: "critical" | "high";
+};
+
+type PairViolation = {
+  kind: "model_os_pair_violation";
+  serial: string;
+  model: string;
+  android_version: string;
+  valid_range: string[];
+  severity: "high";
+};
+
+type ClusterCheckOut = {
+  fleet_size: number;
+  critical_count: number;
+  pair_violations_count: number;
+  affected_serials: string[];
+  collisions: Collision[];
+  pair_violations: PairViolation[];
+  healthy: boolean;
+};
+
 const DEMO_PHONES: PhoneRow[] = [
   { serial: "RF8N61Z9FZB", name: "Phone 1 - F2 - Tatiana",  state: "PROXY_READY", accountCount: 16, model: "Samsung Galaxy S10 Lite" },
   { serial: "RF8N50EM1WK", name: "Phone 2 - F2 - Tatiana",  state: "PROXY_READY", accountCount: 14, model: "Samsung Galaxy S10 Lite" },
@@ -52,36 +79,91 @@ const STATE_LABEL: Record<PhoneState, string> = {
   OFFLINE:     "Offline",
 };
 
+function collisionTooltipFor(serial: string, c: ClusterCheckOut): string {
+  const parts: string[] = [];
+  for (const col of c.collisions) {
+    if (col.serials.some((s) => s.split(":")[0] === serial)) {
+      const others = col.serials
+        .map((s) => s.split(":")[0])
+        .filter((s) => s !== serial);
+      parts.push(`${col.field} shared with ${others.join(", ")}`);
+    }
+  }
+  for (const v of c.pair_violations) {
+    if (v.serial === serial) {
+      parts.push(`${v.model} on Android ${v.android_version} (valid: ${v.valid_range.join(", ")})`);
+    }
+  }
+  return parts.join(" · ");
+}
+
 export default function FleetPage() {
   const [phones, setPhones]       = useState<PhoneRow[]>(DEMO_PHONES);
   const [view, setView]           = useState<"table" | "grid">("table");
   const [scanning, setScanning]   = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [backendDown, setBackendDown] = useState(false);
+  const [clusterCheck, setClusterCheck] = useState<ClusterCheckOut | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8001/api/fleet/phones")
+    // Backend /api/fleet returns { total, phones: [{serial, state, ...}] }.
+    // Map to the PhoneRow shape the UI uses; metadata.model comes from the
+    // mirror when attached, falls back to a generic label otherwise.
+    fetch("/api/fleet")
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
-      .then((d) => { if (Array.isArray(d) && d.length > 0) setPhones(d); })
+      .then((d) => {
+        const rows = Array.isArray(d?.phones) ? d.phones : [];
+        if (rows.length === 0) return;
+        setPhones(rows.map((p: Record<string, unknown>, i: number): PhoneRow => {
+          const raw = String(p.state ?? "offline").toUpperCase();
+          const state: PhoneState =
+            raw === "PROXY_READY" ? "PROXY_READY" :
+            raw === "BUSY"        ? "BUSY" :
+            raw === "ONLINE"      ? "ONLINE" :
+                                    "OFFLINE";
+          const meta = (p.metadata ?? {}) as Record<string, unknown>;
+          const model = String(meta.model ?? "Samsung Galaxy phone");
+          return {
+            serial: String(p.serial),
+            name: `Phone ${i + 1}`,
+            state,
+            accountCount: Number((p.clone_count as number) ?? 0),
+            model,
+            wifi_ip: (meta.wifi_ip as string | undefined) ?? undefined,
+          };
+        }));
+      })
       .catch(() => setBackendDown(true));
+  }, []);
+
+  useEffect(() => {
+    const load = () => {
+      fetch("/api/fleet/cluster/collisions")
+        .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+        .then((d: ClusterCheckOut) => setClusterCheck(d))
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
   }, []);
 
   const handleScan = async () => {
     setScanning(true);
-    try { await fetch("http://localhost:8001/api/fleet/scan", { method: "POST" }); } catch {}
+    try { await fetch("/api/fleet/scan", { method: "POST" }); } catch {}
     setTimeout(() => setScanning(false), 2000);
   };
 
   const handleVerifyAll = async () => {
     setVerifying(true);
-    try { await fetch("http://localhost:8001/api/fleet/verify-all", { method: "POST" }); } catch {}
+    try { await fetch("/api/fleet/verify-all", { method: "POST" }); } catch {}
     setTimeout(() => setVerifying(false), 3000);
   };
 
   const handleDelete = async (serial: string) => {
     if (!confirm(`Remove ${serial} from the fleet?`)) return;
     setPhones((prev) => prev.filter((p) => p.serial !== serial));
-    try { await fetch(`http://localhost:8001/api/fleet/phones/${serial}`, { method: "DELETE" }); } catch {}
+    try { await fetch(`/api/fleet/phones/${serial}`, { method: "DELETE" }); } catch {}
   };
 
   const counts = {
@@ -147,6 +229,61 @@ export default function FleetPage() {
         </div>
       </div>
 
+      {/* Cluster-collision banner — CLAUDE.md fleet-scale audit gate */}
+      {clusterCheck && !clusterCheck.healthy && (
+        <div className="phantom-panel p-4 border border-red-500/40 bg-red-500/5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-red-400" strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-red-400">
+                  Fleet identity collision detected
+                </span>
+                <span className="text-[10px] font-mono text-red-400/80 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30">
+                  CLUSTER ALERT
+                </span>
+              </div>
+              <div className="text-xs text-phantom-ghost mt-1">
+                {clusterCheck.critical_count} critical identity collision{clusterCheck.critical_count === 1 ? "" : "s"}
+                {clusterCheck.pair_violations_count > 0 && (
+                  <> · {clusterCheck.pair_violations_count} model/OS mismatch{clusterCheck.pair_violations_count === 1 ? "" : "es"}</>
+                )}
+                {" "}on {clusterCheck.affected_serials.length} of {clusterCheck.fleet_size} phones.
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {clusterCheck.collisions.slice(0, 4).map((c, i) => (
+                  <div key={i} className="text-xs font-mono text-red-300/90 bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5 flex items-center gap-2">
+                    <span className="text-red-400 font-semibold">{c.field}</span>
+                    <span className="text-phantom-ghost truncate" title={c.value}>= {c.value.slice(0, 20)}…</span>
+                    <span className="ml-auto text-phantom-ghost">
+                      {c.serials.length} devices
+                    </span>
+                  </div>
+                ))}
+                {clusterCheck.pair_violations.slice(0, 3).map((v, i) => (
+                  <div key={`p${i}`} className="text-xs font-mono text-phantom-amber bg-phantom-amber/5 border border-phantom-amber/20 rounded px-2 py-1.5 flex items-center gap-2">
+                    <span className="font-semibold">pair</span>
+                    <span>{v.serial}</span>
+                    <span className="text-phantom-ghost">
+                      {v.model} claims Android {v.android_version} (valid: {v.valid_range.join(", ")})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clusterCheck?.healthy && (
+        <div className="flex items-center gap-2 text-xs text-green-400">
+          <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
+          <span>No fleet identity collisions · {clusterCheck.fleet_size} devices audited</span>
+        </div>
+      )}
+
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -182,11 +319,20 @@ export default function FleetPage() {
                     key={phone.serial}
                     className="border-b border-phantom-border/40 hover:bg-phantom-panelHi/30 transition-colors"
                   >
-                    {/* Device ID */}
+                    {/* Device ID + collision badge */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className={cn("w-2 h-2 rounded-full shrink-0", STATE_DOT[phone.state])} />
                         <span className="font-mono text-xs text-phantom-ghost">{phone.serial}</span>
+                        {clusterCheck?.affected_serials.includes(phone.serial) && (
+                          <span
+                            title={collisionTooltipFor(phone.serial, clusterCheck)}
+                            className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-400 uppercase tracking-wider"
+                          >
+                            <ShieldCheck className="w-2.5 h-2.5" strokeWidth={2.5} />
+                            Collision
+                          </span>
+                        )}
                       </div>
                     </td>
 

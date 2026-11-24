@@ -77,7 +77,9 @@ export function ActionStream() {
     // Seed with demo events immediately on mount (client-only, safe from hydration).
     setEvents(Array.from({ length: 8 }, makeDemoEvent));
 
-    const WS_URL = `ws://${window.location.hostname}:8002/ws/fleet`;
+    const WS_URL = process.env.NEXT_PUBLIC_WS_URL
+      ? `${process.env.NEXT_PUBLIC_WS_URL}/fleet`
+      : `ws://${window.location.hostname}:8000/ws/fleet`;
     let ws: WebSocket;
     let pingInterval: ReturnType<typeof setInterval>;
 

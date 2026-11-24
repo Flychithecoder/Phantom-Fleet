@@ -35,13 +35,16 @@ WiFi ADB setup (one-time per phone):
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from .apk_client import APKClient, APKCallFailed
+
+log = logging.getLogger("phantom_fleet.phone_controller")
 
 
 # ---------------------------------------------------------------------------
@@ -513,8 +516,18 @@ class PhoneFleet:
 
     At startup, call scan() to discover all connected ADB devices.
     The fleet is keyed by ADB serial (IP:port for WiFi ADB).
+
+    Discovery is mirror-first: if a Phantom Fleet Mirror is attached (set via
+    PHANTOM_MIRROR_URL), scan() reads its /devices inventory, which sees every
+    phone the mirror owns via USB even when they aren't registered with the
+    shared ADB server on :5037. Without a mirror, scan() falls back to the
+    local `adb devices` call (which only sees phones the shared ADB server
+    has claimed — typically a small subset on a multi-tool farm).
     """
     _phones: dict[str, PhoneController] = field(default_factory=dict)
+    # Set via set_mirror() during app lifespan. Any truthy object is treated as
+    # a Phantom Fleet Mirror client with .available / .list_devices().
+    mirror: Optional[Any] = None
 
     def register(self, serial: str, **kwargs) -> PhoneController:
         """Register a phone by its ADB serial."""
@@ -522,11 +535,58 @@ class PhoneFleet:
             self._phones[serial] = PhoneController(serial=serial, **kwargs)
         return self._phones[serial]
 
+    def set_mirror(self, mirror: Any) -> None:
+        """
+        Attach a Phantom Fleet Mirror client. Accepts any object exposing
+        `available: bool` and an async `list_devices() -> list[MirrorDevice]`
+        (duck-typed so tests can swap a stub). Pass None to detach.
+        """
+        self.mirror = mirror
+
     async def scan(self) -> list[PhoneController]:
         """
-        Run `adb devices` and register all currently connected devices.
+        Discover connected phones.
+
+        Order of preference:
+            1. The attached Phantom Fleet Mirror, if any and reachable
+            2. Local `adb devices` (shared ADB server on :5037)
+
         Returns list of PhoneController instances (all states).
         """
+        mirror = self.mirror
+        if mirror is not None and getattr(mirror, "available", False):
+            try:
+                devices = await mirror.list_devices()
+            except Exception as exc:
+                log.warning("mirror scan failed, falling back to adb: %s", exc)
+                devices = None
+            if devices:
+                controllers = []
+                for dev in devices:
+                    ctrl = self.register(dev.serial)
+                    ctrl.state = (
+                        PhoneState.ONLINE
+                        if getattr(dev, "state", "") == "online"
+                        else PhoneState.OFFLINE
+                    )
+                    # Cache mirror-provided hardware hints. These feed the
+                    # cross-field consistency gate in the persona factory
+                    # (model ↔ OS pair-check) without an extra ADB round-trip.
+                    ctrl.metadata.update({
+                        "model": dev.model,
+                        "android_version": dev.android_version,
+                        "build_id": dev.build_id,
+                        "wifi_ip": dev.wifi_ip,
+                        "connection": dev.connection,
+                        "battery_pct": dev.battery_pct,
+                        "screen_on": dev.screen_on,
+                        "mirror_slot": dev.mirror_slot,
+                        "hw": dev.hw,
+                    })
+                    controllers.append(ctrl)
+                return controllers
+
+        # Fallback: local ADB server (CONTRACT.md §9 — mirror is optional).
         try:
             raw = await _run_adb("devices", timeout=10)
         except ADBCommandFailed:

@@ -78,7 +78,7 @@ type ActivityItem = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+const API_BASE = "";
 
 const PLATFORMS = [
   "instagram", "threads", "reddit", "x", "tiktok",
@@ -223,7 +223,9 @@ export default function OpsPage() {
     fetchAll();
     const poll = setInterval(fetchAll, 30_000);
 
-    const wsUrl = API_BASE.replace(/^http/, "ws") + "/ws/ops";
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL
+      ? `${process.env.NEXT_PUBLIC_WS_URL}/ops`
+      : `ws://${window.location.hostname}:8000/ws/ops`;
     try {
       const ws = new WebSocket(wsUrl);
       ws.onmessage = (ev) => {

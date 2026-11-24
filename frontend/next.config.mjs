@@ -5,14 +5,13 @@ const nextConfig = {
     optimizePackageImports: ["lucide-react", "recharts", "framer-motion"],
   },
   async rewrites() {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    // Next.js rewrites don't support ws:// destinations — WebSocket connections
+    // must be made directly via NEXT_PUBLIC_WS_URL in client code.
     return [
       {
-        source: "/api/v1/:path*",
-        destination: "http://localhost:8002/api/v1/:path*",
-      },
-      {
-        source: "/ws/:path*",
-        destination: "http://localhost:8002/ws/:path*",
+        source: "/api/:path*",
+        destination: `${apiBase}/api/:path*`,
       },
     ];
   },

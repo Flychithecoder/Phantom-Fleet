@@ -90,7 +90,7 @@ function ProvisionModal({ onClose }: { onClose: () => void }) {
     if (!credentials.trim()) return;
     setSubmitting(true);
     try {
-      await fetch("http://localhost:8001/api/accounts/provision", {
+      await fetch("/api/accounts/provision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

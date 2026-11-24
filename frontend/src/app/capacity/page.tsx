@@ -200,7 +200,7 @@ export default function CapacityPage() {
       .filter(Boolean);
 
     try {
-      const res = await fetch("http://localhost:8001/api/capacity-plan", {
+      const res = await fetch("/api/capacity-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

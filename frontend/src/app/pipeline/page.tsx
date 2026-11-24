@@ -53,7 +53,7 @@ interface AccountEntry {
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE = "http://localhost:8001";
+const API_BASE = "";
 
 const PHONE_SERIALS = [
   "emulator-5554",

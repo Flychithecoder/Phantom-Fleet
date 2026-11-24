@@ -103,7 +103,7 @@ export default function AccountStatsPage({
   const [range, setRange] = useState<7 | 14 | 30>(30);
 
   useEffect(() => {
-    fetch(`http://localhost:8001/api/accounts/${account_id}/stats?days=30`)
+    fetch(`/api/accounts/${account_id}/stats?days=30`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d) => {
         if (d?.days?.length) {

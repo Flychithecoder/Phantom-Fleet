@@ -50,7 +50,7 @@ type AccountResult = {
   error: string | null;
 };
 
-const API = "http://localhost:8001";
+const API = "";
 
 // ---------------------------------------------------------------------------
 // Step config

@@ -37,14 +37,16 @@ from .distributions import LogNormal, Normal, WeightedCategorical
 DEVICE_DISTRIBUTION = WeightedCategorical(
     choices=[
         # model, weight
-        ("SM-G770F", 12.0),   # Galaxy S10 Lite EU (user's fleet)
-        ("SM-G770U1", 8.0),   # Galaxy S10 Lite US
+        ("SM-G770F", 10.0),   # Galaxy S10 Lite EU (Phase 0 fleet)
+        ("SM-G770U1", 7.0),   # Galaxy S10 Lite US
         ("SM-G973F", 6.0),    # Galaxy S10
         ("SM-G975F", 5.0),    # Galaxy S10+
         ("SM-G980F", 7.0),    # Galaxy S20
         ("SM-G981U", 5.0),    # Galaxy S20 5G US
         ("SM-G991U", 4.0),    # Galaxy S21 US
         ("SM-G998U", 3.0),    # Galaxy S21 Ultra US
+        ("SM-G990B", 9.0),    # Galaxy S21 FE 5G EU (connected fleet)
+        ("SM-G990U", 6.0),    # Galaxy S21 FE 5G US
         ("SM-A515F", 9.0),    # Galaxy A51 (very common)
         ("SM-A526B", 7.0),    # Galaxy A52
         ("SM-A536U", 5.0),    # Galaxy A53
@@ -56,22 +58,70 @@ DEVICE_DISTRIBUTION = WeightedCategorical(
 
 
 # ---------------------------------------------------------------------------
-# Android version distribution — spread along natural update-lag curve.
-# Most users are 1-2 major versions behind, not all on the latest patch.
+# Model → Android-version shipping ranges.
+#
+# Per CLAUDE.md cross-field consistency rule: "If a persona claims a device
+# model, the OS version must be in the range that model actually shipped with."
+#
+# Values below are each model's launch-OS through latest known major Android
+# release the model received as an OTA. Picking an Android version outside
+# this list is a cluster-detection tell.
 # ---------------------------------------------------------------------------
 
 
+MODEL_OS_RANGES: dict[str, tuple[str, ...]] = {
+    "SM-G770F":  ("10", "11", "12", "13"),            # S10 Lite EU
+    "SM-G770U1": ("10", "11", "12", "13"),            # S10 Lite US
+    "SM-G973F":  ("9",  "10", "11", "12"),            # S10
+    "SM-G975F":  ("9",  "10", "11", "12"),            # S10+
+    "SM-G980F":  ("10", "11", "12", "13", "14"),      # S20
+    "SM-G981U":  ("10", "11", "12", "13", "14"),      # S20 5G
+    "SM-G991U":  ("11", "12", "13", "14", "15"),      # S21
+    "SM-G998U":  ("11", "12", "13", "14", "15"),      # S21 Ultra
+    "SM-G990B":  ("12", "13", "14", "15"),            # S21 FE 5G EU — shipped Jan 2022
+    "SM-G990U":  ("12", "13", "14", "15"),            # S21 FE 5G US
+    "SM-A515F":  ("10", "11", "12", "13"),            # A51
+    "SM-A526B":  ("11", "12", "13", "14"),            # A52
+    "SM-A536U":  ("12", "13", "14"),                  # A53
+    "Pixel 6":   ("12", "13", "14", "15", "16"),
+    "Pixel 7":   ("13", "14", "15", "16"),
+    "SM-N986B":  ("10", "11", "12", "13"),            # Note 20 Ultra
+}
+
+
+# Fleet-wide Android update-lag curve — used to weight versions WITHIN the
+# model's valid set. Most users are 1-2 majors behind, not on the latest patch.
+_ANDROID_LAG_WEIGHTS: dict[str, float] = {
+    "9":  2.0,
+    "10": 8.0,
+    "11": 22.0,
+    "12": 24.0,
+    "13": 22.0,
+    "14": 15.0,
+    "15": 6.0,
+    "16": 3.0,
+}
+
+
+# Kept for callers that explicitly want the unconstrained distribution (audit,
+# calibration). The persona factory itself uses the model-constrained sampler.
 ANDROID_VERSION_DISTRIBUTION = WeightedCategorical(
-    choices=[
-        ("10", 8.0),
-        ("11", 22.0),  # Phase 0 fleet is Android 11
-        ("12", 24.0),
-        ("13", 22.0),
-        ("14", 15.0),
-        ("15", 6.0),
-        ("16", 3.0),
-    ]
+    choices=[(v, w) for v, w in _ANDROID_LAG_WEIGHTS.items()],
 )
+
+
+def sample_android_version_for_model(model: str, rng) -> str:
+    """Draw an Android version constrained to the model's shipping range.
+
+    Weights versions by the fleet-wide update-lag curve, intersected with the
+    versions the model actually received. Falls back to the unconstrained
+    distribution when the model is not registered (new model added, audit miss).
+    """
+    valid = MODEL_OS_RANGES.get(model)
+    if not valid:
+        return ANDROID_VERSION_DISTRIBUTION.sample()
+    weights = [_ANDROID_LAG_WEIGHTS.get(v, 1.0) for v in valid]
+    return rng.choices(valid, weights=weights, k=1)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +287,8 @@ def create_persona(
 
     city, state = US_EAST_COAST_CITIES.sample()
     device_model = DEVICE_DISTRIBUTION.sample()
-    android_version = ANDROID_VERSION_DISTRIBUTION.sample()
+    # CLAUDE.md cross-field rule: OS version must be in the range the model shipped with.
+    android_version = sample_android_version_for_model(device_model, rng)
 
     return Persona(
         persona_id=persona_id,

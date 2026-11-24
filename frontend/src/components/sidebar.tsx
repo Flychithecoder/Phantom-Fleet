@@ -8,7 +8,7 @@ import {
   LineChart, Image as ImageIcon, ShieldAlert, Settings, CalendarDays, Gauge,
   Globe, Wand2, Vault, Brain, RotateCcw, MessageSquare, Network, Bookmark,
   Film, ArrowRight, Server, MessageCircle, Repeat2, Zap, Newspaper,
-  TrendingUp, FlaskConical, Video, Flame, Heart, ShieldCheck,
+  TrendingUp, FlaskConical, Video, Flame, Heart, ShieldCheck, Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/",          label: "Overview",       icon: LayoutDashboard },
       { href: "/briefing",  label: "Daily Briefing", icon: Newspaper },
+      { href: "/phase1",    label: "Phase 1 Launch", icon: Rocket },
+      { href: "/phase2",    label: "Phase 2 Launch", icon: Rocket },
       { href: "/fleet",     label: "Fleet",          icon: Smartphone },
       { href: "/onboarding",label: "Onboarding",     icon: Wand2 },
       { href: "/accounts",  label: "Accounts",       icon: Activity },

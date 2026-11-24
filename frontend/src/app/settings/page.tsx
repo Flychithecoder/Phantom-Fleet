@@ -16,7 +16,7 @@ export default function SettingsPage() {
     setTestStatus("loading");
     setTestMsg("");
     try {
-      const res = await fetch("http://localhost:8001/api/v1/settings/openrouter/test", {
+      const res = await fetch("/api/v1/settings/openrouter/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: apiKey, model }),
@@ -38,7 +38,7 @@ export default function SettingsPage() {
   async function handleSave() {
     setSaveStatus("saving");
     try {
-      const res = await fetch("http://localhost:8001/api/v1/settings/openrouter", {
+      const res = await fetch("/api/v1/settings/openrouter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: apiKey, model, daily_cap_usd: dailyCap }),

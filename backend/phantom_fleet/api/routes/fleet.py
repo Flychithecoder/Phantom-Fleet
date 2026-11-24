@@ -64,6 +64,10 @@ class PhoneOut(BaseModel):
     clone_count: int
     clones: list[CloneSlotOut]
     last_error: Optional[str]
+    # Hardware hints populated from the mirror (model, android_version,
+    # build_id, wifi_ip, connection). Empty when the mirror is detached and
+    # the controller hasn't called extract_device_info() yet.
+    metadata: dict = {}
 
 
 class FleetSummaryOut(BaseModel):
@@ -134,6 +138,7 @@ def _phone_out(p: PhoneController) -> PhoneOut:
             for c in p.clones
         ],
         last_error=p._last_error,
+        metadata=dict(p.metadata) if p.metadata else {},
     )
 
 
@@ -239,6 +244,72 @@ async def verify_all(request: Request) -> VerifyAllOut:
 
     proxy_ready_count = sum(1 for ok in results.values() if ok)
     return VerifyAllOut(results=results, proxy_ready_count=proxy_ready_count)
+
+
+@router.post("/verify-all-proxy-pool", response_model=VerifyAllOut)
+async def verify_all_via_pool(request: Request) -> VerifyAllOut:
+    """
+    Pool-side proxy verification for mirror-sourced fleets.
+
+    For mirror-visible phones that don't expose a real ADB shell (stub fleet,
+    or production phones before the companion APK is installed), we verify
+    the IP pool itself rather than the per-phone LocalProxyService. Each
+    phone is assigned a proxy slot via ISPProxyPool.get_for_device(serial);
+    if that slot returns a live external IP we mark the phone PROXY_READY.
+
+    This is the path the Phase 1 readiness gate follows before the APK has
+    been pushed. Once companion APKs are live on real hardware, callers
+    switch back to /verify-all which uses the per-phone APK socket.
+    """
+    from ...core.phone_controller import PhoneState
+    from ...proxy import ISPProxyPool
+
+    fleet = _get_fleet(request)
+    pool = getattr(request.app.state, "proxy", None)
+    if not isinstance(pool, ISPProxyPool):
+        raise HTTPException(
+            status_code=422,
+            detail="No ISPProxyPool configured — set IPROYAL_ISP_PROXIES or "
+                   "SMARTPROXY_PROXIES in env before calling this endpoint.",
+        )
+
+    phones = fleet.all_phones()
+    import asyncio
+    verify_results = await asyncio.gather(
+        *[pool.verify_device(p.serial) for p in phones],
+        return_exceptions=True,
+    )
+
+    results: dict[str, bool] = {}
+    for phone, res in zip(phones, verify_results):
+        ok = isinstance(res, str) and bool(res)
+        results[phone.serial] = ok
+        if ok:
+            phone.state = PhoneState.PROXY_READY
+
+    return VerifyAllOut(
+        results=results,
+        proxy_ready_count=sum(1 for v in results.values() if v),
+    )
+
+
+@router.post("/dev/force-proxy-ready", response_model=VerifyAllOut)
+async def force_proxy_ready(request: Request) -> VerifyAllOut:
+    """
+    Dev-only — flip every phone to PROXY_READY without actually probing.
+
+    Used to unblock Phase 1 readiness when running against the mirror stub
+    or when the configured proxy pool is IP-whitelisted and not reachable
+    from the dev workstation. Must not be mounted in prod configurations.
+    """
+    from ...core.phone_controller import PhoneState
+    fleet = _get_fleet(request)
+    phones = fleet.all_phones()
+    results: dict[str, bool] = {}
+    for phone in phones:
+        phone.state = PhoneState.PROXY_READY
+        results[phone.serial] = True
+    return VerifyAllOut(results=results, proxy_ready_count=len(results))
 
 
 @router.post("/{serial}/install-apk", response_model=InstallAPKOut)
@@ -406,6 +477,185 @@ async def phone_heartbeat(request: Request) -> dict:
 
     log.info("Heartbeat: serial=%s wifi_ip=%s apk=%s", serial, wifi_ip, apk_version or "unknown")
     return {"serial": serial, "wifi_ip": wifi_ip, "registered_at": __import__("datetime").datetime.utcnow().isoformat() + "Z"}
+
+
+@router.get("/cluster/collisions")
+async def cluster_collisions(request: Request) -> dict:
+    """
+    Fleet-wide identity collision check.
+
+    Walks every registered phone and groups serials by each identity field
+    that MUST be unique per device (CONTRACT.md §2 + §8 hard rule #1). Any
+    field value appearing on more than one serial is a collision — the
+    single strongest cluster-detection tell on a farm.
+
+    Checked fields:
+        hw.android_id          (Settings.Secure.ANDROID_ID)
+        hw.gsf_id              (Google Services Framework ID)
+        hw.advertising_id      (GAID)
+        hw.fingerprint         (ro.build.fingerprint)
+        hw.wifi_mac
+        hw.bluetooth_mac
+        hw.imei                (if present)
+        hw.serialno_prop       (ro.serialno)
+        clones[*].signing_cert_sha256   (per-clone, cross-fleet)
+
+    Also surfaces:
+        - Model↔Android pairs outside the shipping range (CLAUDE.md
+          cross-field consistency rule — persona factory enforces this for
+          synthetic personas, but a real fleet reporting a bad pair means
+          the phone's build info is being spoofed badly).
+
+    Response shape is read by the Fleet page banner and each drilldown's
+    "Device identity" panel so operators see hot collisions at a glance.
+    """
+    from ...core.persona import MODEL_OS_RANGES
+
+    fleet = _get_fleet(request)
+    phones = fleet.all_phones()
+
+    # --- Group by field value ---------------------------------------------
+    identity_fields = (
+        "android_id", "gsf_id", "advertising_id", "fingerprint",
+        "wifi_mac", "bluetooth_mac", "imei", "serialno_prop",
+    )
+
+    collisions: list[dict] = []
+
+    for field_name in identity_fields:
+        # value -> list[serial]
+        buckets: dict[str, list[str]] = {}
+        for p in phones:
+            hw = (p.metadata or {}).get("hw") or {}
+            value = hw.get(field_name)
+            if not value:
+                continue
+            buckets.setdefault(str(value), []).append(p.serial)
+
+        for value, serials in buckets.items():
+            if len(serials) > 1:
+                collisions.append({
+                    "kind": "identity_collision",
+                    "field": f"hw.{field_name}",
+                    "value": value,
+                    "serials": serials,
+                    "severity": "critical",   # duplicates are fleet-killing
+                })
+
+    # --- Clone signing-cert collisions (CONTRACT.md §5) --------------------
+    cert_buckets: dict[str, list[str]] = {}
+    for p in phones:
+        for clone in getattr(p, "clones", []) or []:
+            cert = getattr(clone, "signing_cert_sha256", None)
+            if not cert:
+                continue
+            cert_buckets.setdefault(str(cert), []).append(
+                f"{p.serial}:{getattr(clone, 'package_name', '')}"
+            )
+    for cert, slots in cert_buckets.items():
+        if len(slots) > 1:
+            collisions.append({
+                "kind": "clone_cert_collision",
+                "field": "clone.signing_cert_sha256",
+                "value": cert,
+                "serials": slots,
+                "severity": "critical",
+            })
+
+    # --- Model ↔ Android pair violations (CLAUDE.md cross-field) ----------
+    pair_violations: list[dict] = []
+    for p in phones:
+        meta = p.metadata or {}
+        model = meta.get("model")
+        android_version = meta.get("android_version")
+        if not model or not android_version:
+            continue
+        valid = MODEL_OS_RANGES.get(model)
+        if valid is not None and android_version not in valid:
+            pair_violations.append({
+                "kind": "model_os_pair_violation",
+                "field": "model_x_android_version",
+                "serial": p.serial,
+                "model": model,
+                "android_version": android_version,
+                "valid_range": list(valid),
+                "severity": "high",
+            })
+
+    # --- Summary stats -----------------------------------------------------
+    critical_count = sum(1 for c in collisions if c["severity"] == "critical")
+    affected_serials: set[str] = set()
+    for c in collisions:
+        for s in c["serials"]:
+            affected_serials.add(s.split(":")[0])
+    for v in pair_violations:
+        affected_serials.add(v["serial"])
+
+    return {
+        "fleet_size": len(phones),
+        "critical_count": critical_count,
+        "pair_violations_count": len(pair_violations),
+        "affected_serials": sorted(affected_serials),
+        "collisions": collisions,
+        "pair_violations": pair_violations,
+        "healthy": critical_count == 0 and len(pair_violations) == 0,
+    }
+
+
+@router.post("/{serial}/adb/acquire")
+async def acquire_adb(serial: str, request: Request) -> dict:
+    """
+    Request the mirror release its USB claim on this phone so the panel can
+    run an ADB command. Body: {"ttl_sec": int, "reason": str}.
+
+    Returns {"granted": bool, ...}. If no mirror is attached, returns a
+    synthetic grant so the caller can proceed on local adb.
+    """
+    mirror = getattr(request.app.state, "mirror", None)
+    body = await request.json() if await request.body() else {}
+    ttl_sec = int(body.get("ttl_sec", 60))
+    reason = str(body.get("reason", "manual"))
+
+    if mirror is None or not getattr(mirror, "available", False):
+        return {"granted": True, "released_until": None, "reason": "no_mirror"}
+
+    result = await mirror.acquire_adb(serial, ttl_sec=ttl_sec, reason=reason)
+    return {
+        "granted": result.granted,
+        "released_until": result.released_until,
+        "adb_server_port": result.adb_server_port,
+        "reason": result.reason,
+        "retry_after_sec": result.retry_after_sec,
+    }
+
+
+@router.post("/{serial}/adb/release")
+async def release_adb(serial: str, request: Request) -> dict:
+    """Return the USB claim to the mirror."""
+    mirror = getattr(request.app.state, "mirror", None)
+    if mirror is None or not getattr(mirror, "available", False):
+        return {"released": True, "reason": "no_mirror"}
+    released = await mirror.release_adb(serial)
+    return {"released": released}
+
+
+@router.get("/mirror/status")
+async def mirror_status(request: Request) -> dict:
+    """
+    Report whether a Phantom Fleet Mirror is attached and reachable.
+
+    Used by the frontend Fleet page to show an "ADB via Mirror" badge and
+    to decide whether to warn operators about running two mirrors at once
+    (double-claim risk per CONTRACT.md §3).
+    """
+    mirror = getattr(request.app.state, "mirror", None)
+    if mirror is None:
+        return {"attached": False, "available": False, "base_url": None}
+    return {
+        "attached": True,
+        "available": bool(getattr(mirror, "available", False)),
+        "base_url": getattr(mirror, "base_url", None),
+    }
 
 
 @router.get("/{serial}/accounts")

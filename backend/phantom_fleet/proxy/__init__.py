@@ -121,7 +121,7 @@ class IPRoyalOrchestrator:
         """
         try:
             async with httpx.AsyncClient(
-                proxies=proxy_url,
+                proxy=proxy_url,
                 timeout=_IP_CHECK_TIMEOUT,
             ) as client:
                 resp = await client.get(_IP_CHECK_URL)
@@ -424,10 +424,12 @@ class ISPProxyPool:
         Returns external IP string on success, None on failure.
         All accounts on this phone share this result.
         """
-        url = self.get_for_device(phone_serial)
+        # Verify via HTTP (IPRoyal universal port accepts HTTP/HTTPS/SOCKS5);
+        # httpx needs httpx-socks for socks:// URLs — avoid that dep here.
+        url = self.get_for_device(phone_serial, scheme="http")
         try:
             async with httpx.AsyncClient(
-                proxies=url,
+                proxy=url,
                 timeout=_IP_CHECK_TIMEOUT,
             ) as client:
                 resp = await client.get(_IP_CHECK_URL)
@@ -494,6 +496,109 @@ def smartproxy_pool_from_env() -> Optional["ISPProxyPool"]:
     accounts_per_phone = int(os.environ.get("SMARTPROXY_ACCOUNTS_PER_PHONE", "12"))
     log.info("Loaded %d Smartproxy proxies from environment", len(proxies))
     return ISPProxyPool(proxies, accounts_per_ip=accounts_per_ip, accounts_per_phone=accounts_per_phone)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Generic Proxy Pool — provider-agnostic, runtime-mutable
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _parse_proxy_line(line: str) -> ISPProxy:
+    """Accept any of:
+        host:port
+        host:port:user:pass
+        scheme://user:pass@host:port
+        scheme://host:port
+    """
+    s = line.strip()
+    if "://" in s:
+        import urllib.parse as up
+        u = up.urlparse(s)
+        if not u.hostname or not u.port:
+            raise ValueError(f"Cannot parse proxy URL: {s!r}")
+        return ISPProxy(
+            host=u.hostname, port=int(u.port),
+            username=u.username or "", password=u.password or "",
+        )
+    return ISPProxy.parse(s)
+
+
+class GenericProxyPool(ISPProxyPool):
+    """
+    Provider-agnostic proxy pool with runtime add/remove.
+
+    Accepts any proxy line — any vendor, any format. Each entry is just
+    host:port with optional credentials. No vendor-specific parsing, no
+    vendor-specific auth tricks: whatever your provider hands you, paste
+    it in.
+
+    Supports live mutation: add_proxy() / remove_proxy() update the pool
+    without a restart, and the per-device slot stays stable because the
+    hash is keyed on the phone serial.
+    """
+
+    def __init__(
+        self,
+        proxies: Optional[list[ISPProxy]] = None,
+        accounts_per_ip: int = 4,
+        accounts_per_phone: int = 12,
+    ):
+        super().__init__(
+            proxies or [ISPProxy(host="0.0.0.0", port=0, username="", password="")],
+            accounts_per_ip=accounts_per_ip,
+            accounts_per_phone=accounts_per_phone,
+        )
+        # Replace the sentinel if we were given nothing yet.
+        if not proxies:
+            self._pool = []
+
+    def add_proxy(self, line: str) -> ISPProxy:
+        proxy = _parse_proxy_line(line)
+        self._pool.append(proxy)
+        log.info("GenericProxyPool: added %s:%d (pool_size=%d)",
+                 proxy.host, proxy.port, len(self._pool))
+        return proxy
+
+    def remove_proxy(self, index: int) -> ISPProxy:
+        if index < 0 or index >= len(self._pool):
+            raise IndexError(f"proxy index {index} out of range (size={len(self._pool)})")
+        removed = self._pool.pop(index)
+        log.info("GenericProxyPool: removed %s:%d (pool_size=%d)",
+                 removed.host, removed.port, len(self._pool))
+        return removed
+
+    def list_proxies(self) -> list[dict]:
+        """Return host/port/user (redacted pass) for every entry."""
+        return [
+            {
+                "index": i,
+                "host": p.host,
+                "port": p.port,
+                "username": p.username,
+                "has_password": bool(p.password),
+            }
+            for i, p in enumerate(self._pool)
+        ]
+
+
+def generic_pool_from_env() -> Optional["GenericProxyPool"]:
+    """
+    Build a GenericProxyPool from PHANTOM_PROXY_POOL env var.
+
+    Lines separated by commas OR newlines. Any proxy-line format accepted
+    (see _parse_proxy_line). Empty env → None (caller falls back to legacy
+    vendor-specific pools, then to None).
+    """
+    import os, re
+    raw = os.environ.get("PHANTOM_PROXY_POOL", "").strip()
+    if not raw:
+        return None
+    lines = [l for l in re.split(r"[,\n]+", raw) if l.strip() and not l.strip().startswith("#")]
+    proxies = [_parse_proxy_line(l) for l in lines]
+    accounts_per_ip    = int(os.environ.get("PHANTOM_PROXY_ACCOUNTS_PER_IP",    "4"))
+    accounts_per_phone = int(os.environ.get("PHANTOM_PROXY_ACCOUNTS_PER_PHONE", "12"))
+    log.info("Loaded %d proxies from PHANTOM_PROXY_POOL", len(proxies))
+    return GenericProxyPool(proxies, accounts_per_ip=accounts_per_ip,
+                            accounts_per_phone=accounts_per_phone)
 
 
 def isp_pool_from_env() -> Optional["ISPProxyPool"]:

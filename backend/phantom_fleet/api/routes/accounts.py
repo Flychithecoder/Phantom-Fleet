@@ -249,6 +249,59 @@ async def get_account(account_id: str) -> AccountOut:
     return _row_to_out(row)
 
 
+class SeedDevIn(BaseModel):
+    """Payload for the dev-only /seed-dev endpoint (Phase 1 scaffolding)."""
+    count: int = 36                  # 19 phones × ~2 accounts/phone (Phase 1 min)
+    platform: str = "instagram"
+    username_prefix: str = "phantom_dev"
+
+
+@router.post("/seed-dev", response_model=ProvisionResultOut)
+async def seed_dev_accounts(body: SeedDevIn, request: Request) -> ProvisionResultOut:
+    """
+    Dev-only — populate the in-memory store with mock accounts to unblock
+    the Phase 1 readiness gate while running against the mirror stub.
+
+    Each account is tied round-robin to one of the registered phones. No
+    real credentials, no session bootstrap, no platform contact — this is
+    scaffolding for the UI/orchestrator wiring layer only.
+
+    DO NOT expose on a production listener. Call once per fresh dev boot.
+    """
+    store = _store()
+    fleet = request.app.state.ctx.fleet
+    serials = [p.serial for p in fleet.all_phones()]
+    if not serials:
+        raise HTTPException(status_code=422, detail="No phones registered — run /api/fleet/scan first.")
+
+    results: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
+    for i in range(body.count):
+        account_id = f"dev-{uuid.uuid4().hex[:12]}"
+        serial = serials[i % len(serials)]
+        clone_index = i // len(serials)
+        store[account_id] = {
+            "account_id":   account_id,
+            "username":     f"{body.username_prefix}_{i:03d}",
+            "platform":     body.platform,
+            "phone_serial": serial,
+            "clone_index":  clone_index,
+            "warmup_day":   0,
+            "status":       "active",
+            "created_at":   now,
+            "session_valid": None,
+            "dev_seeded":   True,
+        }
+        results.append({
+            "account_id": account_id,
+            "username":   store[account_id]["username"],
+            "platform":   body.platform,
+            "status":     "provisioned",
+            "error":      None,
+        })
+    return ProvisionResultOut(provisioned=len(results), failed=0, results=results)
+
+
 @router.post("/provision", response_model=ProvisionResultOut)
 async def provision_accounts(
     body: ProvisionRequestIn,
@@ -567,6 +620,9 @@ async def update_account(account_id: str, request: Request) -> dict:
     Also updates the in-memory store so the running executor sees changes immediately.
     """
     _PATCHABLE = {
+        "warmup_day",
+        "locale", "timezone", "device_model", "os_version",
+        "carrier", "hni", "proxy_country", "signing_cert",
         "start_hour", "end_hour", "tags", "clone_package", "status",
         "follow_enabled", "follow_daily_max", "follow_min_delay", "follow_max_delay",
         "like_enabled", "like_daily_max", "like_min_delay", "like_max_delay",
@@ -982,3 +1038,467 @@ async def provision_pending(request: Request) -> dict:
     asyncio.create_task(_run(), name="bulk_provision")
 
     return {"message": f"Provisioning {len(pending)} accounts in background.", "count": len(pending)}
+
+
+# ---------------------------------------------------------------------------
+# Account stats
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{account_id}/stats")
+async def get_account_stats(
+    account_id: str,
+    days: int = 30,
+    request: Request = None,
+) -> dict:
+    """
+    Return per-day action counts + follower snapshots for the stats page.
+
+    Response shape expected by fleet/[serial]/[account_id]/stats/page.tsx:
+        {
+            "username": "tatiannalifee",
+            "days": [
+                {
+                    "date": "Apr 01",
+                    "follows": 20, "unfollows": 14, "likes": 60,
+                    "stories": 140, "comments": 3, "dms": 2,
+                    "followers": 10240, "following": 8012
+                },
+                ...
+            ]
+        }
+    """
+    store = _store()
+    row = store.get(account_id)
+    username = row.get("username", account_id) if row else account_id
+
+    pool = getattr(request.app.state, "db_pool", None) if request else None
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                # Daily action counts
+                count_rows = await conn.fetch(
+                    """
+                    SELECT date, action_type, count
+                    FROM daily_action_counts
+                    WHERE account_id = $1
+                      AND date >= CURRENT_DATE - $2::int
+                    ORDER BY date ASC
+                    """,
+                    account_id, days,
+                )
+                # Follower snapshots (best-effort — table may not exist yet)
+                snap_rows = []
+                try:
+                    snap_rows = await conn.fetch(
+                        """
+                        SELECT snapshot_date, followers, following
+                        FROM account_follower_snapshots
+                        WHERE account_id = $1
+                          AND snapshot_date >= CURRENT_DATE - $2::int
+                        ORDER BY snapshot_date ASC
+                        """,
+                        account_id, days,
+                    )
+                except Exception:
+                    pass
+
+            # Build a date-keyed map
+            counts: dict[str, dict] = {}
+            for r in count_rows:
+                d = r["date"].strftime("%b %d")
+                if d not in counts:
+                    counts[d] = {"follows": 0, "unfollows": 0, "likes": 0,
+                                 "stories": 0, "comments": 0, "dms": 0}
+                counts[d][r["action_type"]] = r["count"]
+
+            snaps: dict[str, dict] = {
+                r["snapshot_date"].strftime("%b %d"): {
+                    "followers": r["followers"],
+                    "following": r["following"],
+                }
+                for r in snap_rows
+            }
+
+            # Merge into ordered day list
+            import datetime as _dt
+            today = _dt.date.today()
+            day_list = []
+            last_followers = row.get("follower_count", 10000) if row else 10000
+            last_following = row.get("following_count", 8000) if row else 8000
+            for i in range(days - 1, -1, -1):
+                d = today - _dt.timedelta(days=i)
+                label = d.strftime("%b %d")
+                snap = snaps.get(label, {})
+                cnt = counts.get(label, {})
+                last_followers = snap.get("followers", last_followers)
+                last_following = snap.get("following", last_following)
+                day_list.append({
+                    "date": label,
+                    "follows":   cnt.get("follows",   cnt.get("follow",   0)),
+                    "unfollows": cnt.get("unfollows",  cnt.get("unfollow", 0)),
+                    "likes":     cnt.get("likes",      cnt.get("like",     0)),
+                    "stories":   cnt.get("stories",    cnt.get("story",    0)),
+                    "comments":  cnt.get("comments",   cnt.get("comment",  0)),
+                    "dms":       cnt.get("dms",        cnt.get("dm",       0)),
+                    "followers": last_followers,
+                    "following": last_following,
+                })
+
+            return {"username": username, "days": day_list}
+
+        except Exception as exc:
+            log.warning("get_account_stats DB query failed for %s: %s", account_id, exc)
+
+    # No DB / fallback — return empty so the frontend uses its own demo generator
+    return {"username": username, "days": []}
+
+
+# ---------------------------------------------------------------------------
+# Follow-source scraping
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{account_id}/scrape-follow-source")
+async def scrape_follow_source(account_id: str, request: Request) -> dict:
+    """
+    Queue a follow-source scrape for this account.
+
+    Body: { "source_username": "targetaccount", "max_followers": 500 }
+
+    Delegates to the source_discovery agent. Returns immediately with a job_id;
+    results are written to the follow_targets table and surfaced via GET /targets.
+    """
+    body = await request.json()
+    source_username: str = body.get("source_username", "").strip()
+    max_followers: int = int(body.get("max_followers", 500))
+
+    if not source_username:
+        raise HTTPException(status_code=422, detail="source_username is required")
+
+    store = _store()
+    if account_id not in store:
+        raise HTTPException(status_code=404, detail=f"Account {account_id!r} not found")
+
+    job_id = str(uuid.uuid4())
+
+    # Persist job stub so the frontend can poll it
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO scrape_jobs
+                        (id, account_id, source_username, max_followers, status, created_at)
+                    VALUES ($1, $2, $3, $4, 'queued', now())
+                    ON CONFLICT DO NOTHING
+                    """,
+                    job_id, account_id, source_username, max_followers,
+                )
+        except Exception as exc:
+            log.warning("scrape_follow_source: DB insert failed: %s", exc)
+
+    log.info(
+        "scrape_follow_source queued: account=%s source=%s max=%d job=%s",
+        account_id, source_username, max_followers, job_id,
+    )
+    return {
+        "job_id": job_id,
+        "account_id": account_id,
+        "source_username": source_username,
+        "max_followers": max_followers,
+        "status": "queued",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Follow targets
+# ---------------------------------------------------------------------------
+
+# In-memory targets store keyed by account_id → list[dict]
+_TARGETS: dict[str, list[dict]] = {}
+
+
+@router.get("/{account_id}/targets")
+async def list_targets(account_id: str, request: Request) -> dict:
+    """
+    Return the follow-target list for an account.
+
+    Returns rows from the follow_targets DB table (if available) or the
+    in-memory fallback.
+    """
+    store = _store()
+    if account_id not in store:
+        raise HTTPException(status_code=404, detail=f"Account {account_id!r} not found")
+
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, username, source_account, followers,
+                           er_estimate, added_at, status
+                    FROM follow_targets
+                    WHERE account_id = $1
+                    ORDER BY added_at DESC
+                    LIMIT 500
+                    """,
+                    account_id,
+                )
+            return {
+                "account_id": account_id,
+                "targets": [dict(r) for r in rows],
+                "total": len(rows),
+            }
+        except Exception as exc:
+            log.warning("list_targets DB query failed for %s: %s", account_id, exc)
+
+    mem = _TARGETS.get(account_id, [])
+    return {"account_id": account_id, "targets": mem, "total": len(mem)}
+
+
+@router.post("/{account_id}/targets")
+async def add_targets(account_id: str, request: Request) -> dict:
+    """
+    Manually add usernames to the follow-target list.
+
+    Body: { "usernames": ["user1", "user2"], "source_account": "optional" }
+    """
+    store = _store()
+    if account_id not in store:
+        raise HTTPException(status_code=404, detail=f"Account {account_id!r} not found")
+
+    body = await request.json()
+    usernames: list[str] = [u.strip().lstrip("@") for u in body.get("usernames", []) if u.strip()]
+    source_account: str = body.get("source_account", "")
+
+    if not usernames:
+        raise HTTPException(status_code=422, detail="usernames list is required")
+
+    added: list[dict] = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                for uname in usernames:
+                    tid = str(uuid.uuid4())
+                    await conn.execute(
+                        """
+                        INSERT INTO follow_targets
+                            (id, account_id, username, source_account, status, added_at)
+                        VALUES ($1, $2, $3, $4, 'pending', now())
+                        ON CONFLICT (account_id, username) DO NOTHING
+                        """,
+                        tid, account_id, uname, source_account or None,
+                    )
+                    added.append({"id": tid, "username": uname, "status": "pending", "added_at": now})
+            return {"account_id": account_id, "added": len(added), "targets": added}
+        except Exception as exc:
+            log.warning("add_targets DB insert failed for %s: %s", account_id, exc)
+
+    # In-memory fallback
+    mem = _TARGETS.setdefault(account_id, [])
+    for uname in usernames:
+        if not any(t["username"] == uname for t in mem):
+            entry = {
+                "id": str(uuid.uuid4()),
+                "username": uname,
+                "source_account": source_account or None,
+                "status": "pending",
+                "added_at": now,
+            }
+            mem.append(entry)
+            added.append(entry)
+
+    return {"account_id": account_id, "added": len(added), "targets": added}
+
+
+@router.delete("/{account_id}/targets/{target_id}", status_code=204)
+async def delete_target(account_id: str, target_id: str, request: Request) -> None:
+    """Remove a single follow-target by its ID."""
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    "DELETE FROM follow_targets WHERE id = $1 AND account_id = $2",
+                    target_id, account_id,
+                )
+            if result != "DELETE 0":
+                return
+        except Exception as exc:
+            log.warning("delete_target DB failed for %s/%s: %s", account_id, target_id, exc)
+
+    mem = _TARGETS.get(account_id, [])
+    _TARGETS[account_id] = [t for t in mem if t["id"] != target_id]
+
+
+@router.post("/{account_id}/targets/ai-scrape")
+async def ai_scrape_targets(account_id: str, request: Request) -> dict:
+    """
+    Kick off an AI-driven follow-target scrape via the source_discovery agent.
+
+    Body: { "seed_hashtags": ["fitness"], "max_targets": 200 }
+
+    Returns a job_id; the agent writes results to follow_targets.
+    """
+    store = _store()
+    if account_id not in store:
+        raise HTTPException(status_code=404, detail=f"Account {account_id!r} not found")
+
+    body = await request.json()
+    seed_hashtags: list[str] = body.get("seed_hashtags", [])
+    max_targets: int = int(body.get("max_targets", 200))
+
+    job_id = str(uuid.uuid4())
+
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO scrape_jobs
+                        (id, account_id, source_username, max_followers, status, created_at)
+                    VALUES ($1, $2, $3, $4, 'queued', now())
+                    ON CONFLICT DO NOTHING
+                    """,
+                    job_id, account_id,
+                    ",".join(seed_hashtags) or "ai_scrape",
+                    max_targets,
+                )
+        except Exception as exc:
+            log.warning("ai_scrape_targets DB insert failed: %s", exc)
+
+    log.info(
+        "ai_scrape_targets queued: account=%s hashtags=%s max=%d job=%s",
+        account_id, seed_hashtags, max_targets, job_id,
+    )
+    return {
+        "job_id": job_id,
+        "account_id": account_id,
+        "seed_hashtags": seed_hashtags,
+        "max_targets": max_targets,
+        "status": "queued",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Account cloning
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{account_id}/clone")
+async def clone_account(account_id: str, request: Request) -> dict:
+    """
+    Clone an account's settings + targets onto a new account record.
+
+    Body: {
+        "username": "new_username",
+        "password": "new_password",
+        "phone_serial": "RFXXXXXXXX",    -- optional
+        "clone_package": "com.ig.clone2" -- optional
+    }
+
+    Copies: start/end hours, all action settings, tags, follow targets.
+    Does NOT copy session credentials or the clone_package (must be re-detected).
+    """
+    store = _store()
+    source = store.get(account_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Account {account_id!r} not found")
+
+    body = await request.json()
+    new_username: str = body.get("username", "").strip()
+    new_password: str = body.get("password", "").strip()
+    if not new_username or not new_password:
+        raise HTTPException(status_code=422, detail="username and password are required")
+
+    new_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    _COPYABLE = [
+        "platform", "start_hour", "end_hour", "tags",
+        "follow_enabled", "follow_daily_max", "follow_min_delay", "follow_max_delay",
+        "like_enabled", "like_daily_max", "like_min_delay", "like_max_delay",
+        "story_enabled", "story_daily_max",
+        "comment_enabled", "comment_daily_max",
+        "dm_enabled", "dm_daily_max",
+        "unfollow_enabled", "unfollow_daily_max",
+    ]
+
+    new_row: dict = {k: source[k] for k in _COPYABLE if k in source}
+    new_row.update({
+        "account_id": new_id,
+        "username": new_username,
+        "password": new_password,
+        "phone_serial": body.get("phone_serial") or source.get("phone_serial"),
+        "clone_package": body.get("clone_package", ""),
+        "warmup_day": 0,
+        "status": "provisioning",
+        "created_at": now,
+        "cloned_from": account_id,
+    })
+
+    # Persist to DB
+    pool = getattr(request.app.state, "db_pool", None)
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO accounts (
+                        id, username, platform, phone_serial, clone_package,
+                        status, start_hour, end_hour,
+                        follow_enabled, follow_daily_max,
+                        like_enabled, like_daily_max,
+                        story_enabled, story_daily_max,
+                        comment_enabled, comment_daily_max,
+                        dm_enabled, dm_daily_max,
+                        unfollow_enabled, unfollow_daily_max,
+                        created_at
+                    ) VALUES (
+                        $1, $2, $3, $4, $5,
+                        'provisioning', $6, $7,
+                        $8, $9, $10, $11, $12, $13,
+                        $14, $15, $16, $17, $18, $19,
+                        now()
+                    )
+                    """,
+                    new_id,
+                    new_username,
+                    new_row.get("platform", "instagram"),
+                    new_row.get("phone_serial"),
+                    new_row.get("clone_package", ""),
+                    new_row.get("start_hour", 8),
+                    new_row.get("end_hour", 22),
+                    new_row.get("follow_enabled", True),
+                    new_row.get("follow_daily_max", 25),
+                    new_row.get("like_enabled", True),
+                    new_row.get("like_daily_max", 75),
+                    new_row.get("story_enabled", True),
+                    new_row.get("story_daily_max", 150),
+                    new_row.get("comment_enabled", False),
+                    new_row.get("comment_daily_max", 8),
+                    new_row.get("dm_enabled", False),
+                    new_row.get("dm_daily_max", 5),
+                    new_row.get("unfollow_enabled", True),
+                    new_row.get("unfollow_daily_max", 25),
+                )
+        except Exception as exc:
+            log.warning("clone_account DB insert failed: %s", exc)
+
+    # In-memory store
+    store[new_id] = new_row
+
+    log.info("clone_account: %s → %s (%s)", account_id, new_id, new_username)
+    return {
+        "account_id": new_id,
+        "username": new_username,
+        "cloned_from": account_id,
+        "status": "provisioning",
+    }
