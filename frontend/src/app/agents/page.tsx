@@ -1,7 +1,10 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import { AgentTree, type ChiefAgent } from "@/components/agent-tree";
 import { Panel } from "@/components/panel";
 import { AgentFeed } from "@/components/agent-feed";
-import { Bot, DollarSign, Activity, Layers } from "lucide-react";
+import { Bot, DollarSign, Activity, Layers, Rocket, ExternalLink, RefreshCw, Shield, Workflow, Users, Zap } from "lucide-react";
 
 // Full agent hierarchy — Chief → 11 platform managers → specialists each
 const CHIEF: ChiefAgent = {
@@ -248,6 +251,292 @@ export default function AgentsPage() {
         </div>
         <AgentFeed />
       </div>
+
+      <StaffroomPanel />
+
+      <StaffroomRosterPanel />
+    </div>
+  );
+}
+
+function StaffroomRosterPanel() {
+  const [roster, setRoster] = useState<any>(null);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [rRoster, rSummary] = await Promise.all([
+        fetch("/api/platforms/staffroom/roster").then((r) => r.json()),
+        fetch("/api/platforms/staffroom/missions/summary").then((r) => r.json()),
+      ]);
+      setRoster(rRoster);
+      setMissions(rSummary?.recent || []);
+      setErr(null);
+    } catch (e: any) {
+      setErr(String(e?.message || e));
+    }
+  }, []);
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [load]);
+
+  const dispatchRole = useCallback(async (slug: string) => {
+    setBusy(slug);
+    try {
+      await fetch("/api/platforms/staffroom/missions/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow: "readiness_review",
+          seed: `role:${slug}:${new Date().toISOString().slice(0, 10)}`,
+          role: slug,
+        }),
+      });
+      await load();
+    } finally { setBusy(null); }
+  }, [load]);
+
+  const roles = roster?.roles || {};
+  const slugs = Object.keys(roles);
+
+  // Fallback: when the provisioner hasn't run, show a single empty-state
+  // panel instead of a grid of nothing.
+  if (slugs.length === 0) {
+    return (
+      <div className="phantom-panel p-5 mt-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Users className="w-4 h-4 text-cyan-400" />
+          <span className="text-[11px] uppercase tracking-wider text-phantom-mist font-mono">
+            Staffroom · roster (21 specialists)
+          </span>
+        </div>
+        <div className="text-[11px] text-phantom-ghost font-mono">
+          No roster found. Run <code>node scripts/provision-staffroom-roster.mjs</code> against the local Staffroom instance to create the 21 bots. The roster file is written to <code>backend/.data/staffroom_roster.json</code>.
+        </div>
+        {err && <div className="text-[11px] font-mono text-red-400 mt-2">UI error: {err}</div>}
+      </div>
+    );
+  }
+
+  // Count missions per bot so each role card can show its most recent mission.
+  const missionsByBot = new Map<string, any[]>();
+  for (const m of missions) {
+    const list = missionsByBot.get(m.staffroom_mission_id || "") || [];
+    list.push(m);
+  }
+
+  return (
+    <div className="phantom-panel p-5 mt-6">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Users className="w-4 h-4 text-cyan-400" />
+        <span className="text-[11px] uppercase tracking-wider text-phantom-mist font-mono">
+          Staffroom · roster · {slugs.length} specialists
+        </span>
+        <span className="text-[10px] text-phantom-ghost font-mono truncate max-w-[280px]">
+          {roster?.base_url}
+        </span>
+        <span className="text-[10px] text-phantom-ghost font-mono flex items-center gap-1">
+          <Shield className="w-3 h-3" /> read-only · owner approves each mission
+        </span>
+        <button onClick={load} className="phantom-btn flex items-center gap-1 text-[10px] ml-auto">
+          <RefreshCw className="w-3 h-3" /> refresh
+        </button>
+      </div>
+
+      {err && <div className="text-[11px] font-mono text-red-400 mb-2">UI error: {err}</div>}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {slugs.map((slug) => {
+          const entry = roles[slug];
+          const isOpus = entry.model_pin === "claude-opus-4-7";
+          const last = entry.last_mission;
+          const lastColor =
+            last?.status === "completed" ? "text-green-400" :
+            last?.status === "running" || last?.status === "queued" ? "text-sky-400" :
+            last?.status === "needs_approval" ? "text-phantom-amber" :
+            last?.status === "failed" ? "text-red-400" : "text-phantom-ghost";
+          return (
+            <div key={slug} className="phantom-panel p-3 border-phantom-charcoal/70 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Bot className={`w-4 h-4 ${isOpus ? "text-fuchsia-400" : "text-cyan-400"}`} />
+                <span className="text-[12px] font-mono text-phantom-mist truncate" title={entry.name}>
+                  {entry.name}
+                </span>
+              </div>
+              <div className="text-[10px] font-mono text-phantom-ghost truncate" title={entry.role}>
+                {entry.role}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-mono">
+                <span className={`px-1.5 py-0.5 border rounded ${
+                  isOpus
+                    ? "bg-fuchsia-500/10 border-fuchsia-500/40 text-fuchsia-300"
+                    : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300"
+                }`}>
+                  {isOpus ? "opus" : "sonnet"}
+                </span>
+                <span className="text-phantom-ghost truncate" title={entry.bot_id}>
+                  {entry.bot_id.slice(0, 8)}…
+                </span>
+              </div>
+              <div className="text-[10px] font-mono text-phantom-ghost flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                <span className="truncate" title={entry.request_id}>{slug}</span>
+              </div>
+              {last ? (
+                <div className="text-[10px] font-mono flex items-center gap-1">
+                  <span className="text-phantom-ghost">last:</span>
+                  <span className={lastColor}>{last.status}</span>
+                  {last.staffroom_mission_id && roster?.base_url && (
+                    <a
+                      href={`${roster.base_url}/missions/${last.staffroom_mission_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-cyan-400 inline-flex items-center gap-0.5 ml-auto"
+                      title={last.staffroom_mission_id}
+                    >
+                      <ExternalLink className="w-3 h-3" /> open
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[10px] font-mono text-phantom-ghost">last: —</div>
+              )}
+              <button
+                onClick={() => dispatchRole(slug)}
+                disabled={!!busy}
+                className="phantom-btn flex items-center justify-center gap-1 text-[10px] mt-auto"
+                title={`Dispatch a readiness_review against ${entry.name}`}
+              >
+                <Rocket className="w-3 h-3" />
+                {busy === slug ? "Dispatching…" : "Dispatch to this role"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-phantom-ghost font-mono mt-3">
+        Dispatches go to Staffroom as <code>needs_approval</code>. Approve each in Staffroom; the runner routes COO/review calls to opus and workers to sonnet from message shape. No paid fallback.
+      </div>
+    </div>
+  );
+}
+
+function StaffroomPanel() {
+  const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/platforms/staffroom/missions/summary");
+      const j = await r.json();
+      setData(j);
+      setErr(null);
+    } catch (e: any) {
+      setErr(String(e?.message || e));
+    }
+  }, []);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+
+  const dispatch = useCallback(async () => {
+    setBusy(true);
+    try {
+      await fetch("/api/platforms/staffroom/missions/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow: "readiness_review" }),
+      });
+      await load();
+    } finally { setBusy(false); }
+  }, [load]);
+
+  const refresh = useCallback(async (rid: string) => {
+    await fetch(`/api/platforms/staffroom/missions/${rid}/refresh`, { method: "POST" });
+    await load();
+  }, [load]);
+
+  const health = data?.staffroom_health;
+  const healthOk = !!health?.ok;
+  const stats = data?.stats || {};
+  const recent = data?.recent || [];
+
+  return (
+    <div className="phantom-panel p-5 mt-6">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <Workflow className="w-4 h-4 text-cyan-400" />
+        <span className="text-[11px] uppercase tracking-wider text-phantom-mist font-mono">
+          Staffroom · system of record · missions · assignments · artifacts
+        </span>
+        <span className={`px-2 py-0.5 border text-[10px] font-mono rounded ${healthOk ? "bg-green-500/10 border-green-500/50 text-green-400" : "bg-red-500/10 border-red-500/50 text-red-400"}`}>
+          {healthOk ? "STAFFROOM UP" : "STAFFROOM DOWN"}
+        </span>
+        <span className="text-[10px] text-phantom-ghost font-mono truncate max-w-[280px]">
+          {data?.base_url}
+        </span>
+        <span className="text-[10px] text-phantom-ghost font-mono flex items-center gap-1">
+          <Shield className="w-3 h-3" /> COO=claude-opus-4-7 · workers=claude-sonnet-4-6
+        </span>
+        <button onClick={load} className="phantom-btn flex items-center gap-2 text-xs" title="Refresh summary">
+          <RefreshCw className="w-3 h-3" />
+        </button>
+        <button onClick={dispatch} disabled={busy} className="phantom-btn flex items-center gap-2 text-xs ml-auto">
+          <Rocket className="w-3 h-3" /> {busy ? "Dispatching…" : "Launch Readiness Review"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-5 gap-3 mb-4">
+        {[
+          { label: "total",         value: stats.total ?? 0,                                    color: "text-phantom-mist" },
+          { label: "needs appr.",   value: stats.by_status?.needs_approval ?? 0,                color: "text-phantom-amber" },
+          { label: "running",       value: (stats.by_status?.running ?? 0) + (stats.by_status?.queued ?? 0), color: "text-sky-400" },
+          { label: "completed",     value: stats.by_status?.completed ?? 0,                     color: "text-green-400" },
+          { label: "failed",        value: (stats.by_status?.failed ?? 0) + (stats.by_status?.pending_dispatch ?? 0), color: "text-red-400" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="phantom-panel p-3 border-phantom-charcoal/70">
+            <div className={`text-[10px] uppercase tracking-wider font-mono ${color}`}>{label}</div>
+            <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {err && <div className="text-[11px] font-mono text-red-400 mb-2">UI error: {err}</div>}
+
+      {recent.length === 0 ? (
+        <div className="text-[11px] text-phantom-ghost font-mono">
+          No missions yet. Dispatching the Readiness Review will post a mission to Staffroom; the COO plan, two worker artifacts, and final report will appear here as they land, with an Open-in-Staffroom link on each row.
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-phantom-ghost font-mono mb-1">recent missions</div>
+          {recent.map((r: any) => (
+            <div key={r.request_id} className="flex items-center gap-3 text-[11px] font-mono py-1.5 border-b border-phantom-charcoal/40">
+              <span className="text-phantom-mist w-48 truncate" title={r.request_id}>{r.request_id}</span>
+              <span className="text-phantom-ghost w-32 truncate" title={r.workflow}>{r.workflow}</span>
+              <span className={`w-28 ${
+                r.status === "completed" ? "text-green-400" :
+                r.status === "running" || r.status === "queued" ? "text-sky-400" :
+                r.status === "needs_approval" ? "text-phantom-amber" :
+                r.status === "failed" ? "text-red-400" : "text-phantom-ghost"
+              }`}>{r.status}</span>
+              <span className="text-phantom-ghost w-32 truncate" title={r.staffroom_mission_id || ""}>{r.staffroom_mission_id || "—"}</span>
+              <button onClick={() => refresh(r.request_id)} className="phantom-btn flex items-center gap-1 text-[10px]">
+                <RefreshCw className="w-3 h-3" /> poll
+              </button>
+              {r.staffroom_mission_id && data?.base_url && (
+                <a
+                  href={`${data.base_url}/missions/${r.staffroom_mission_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="phantom-btn flex items-center gap-1 text-[10px] text-cyan-400"
+                >
+                  <ExternalLink className="w-3 h-3" /> Open in Staffroom
+                </a>
+              )}
+              {r.error && <span className="text-red-400 flex-1 truncate" title={r.error}>{r.error}</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

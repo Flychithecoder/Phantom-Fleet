@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "staffroom": {
+      "command": "node",
+      "args": [
+        "${PF_STAFFROOM_MCP_BRIDGE}"
+      ],
+      "env": {
+        "STAFFROOM_MCP_URL": "${PF_STAFFROOM_MCP_URL}",
+        "STAFFROOM_MCP_TOKEN": "${PF_STAFFROOM_MCP_TOKEN}"
+      }
+    }
+  }
+}

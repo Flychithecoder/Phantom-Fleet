@@ -1,0 +1,12 @@
+{
+  "name": "phantom-fleet-runner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Owner-controlled Claude Code CLI runner. Bridges Staffroom's OpenAI-compatible provider contract to `claude --print --model <id>` subprocess invocations. Uses the authenticated Claude Code subscription on this box. No API keys, no paid fallback.",
+  "main": "src/runner.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node src/runner.mjs",
+    "doctor": "node src/doctor.mjs"
+  }
+}

@@ -49,6 +49,7 @@ from .routes import groups as groups_routes
 from .routes import warmup as warmup_routes
 from .routes import scraper as scraper_routes
 from .routes import strategy as strategy_routes
+from .routes import staffroom_missions as staffroom_routes
 from .routes import scheduler_pro as scheduler_pro_routes
 from .routes import ai_agent_routes
 from .routes import pods as pods_routes
@@ -496,6 +497,40 @@ async def lifespan(app: FastAPI):
     ig_session = InstagramSessionManager(accounts_store_getter=_accounts_store)
     app.state.ig_session = ig_session
 
+    # Staffroom integration — Staffroom is the system of record for missions,
+    # assignments, and artifacts. Fleet keeps only the stable request-id ↔
+    # mission-id mapping plus cached status. Base URL is env-controlled so the
+    # pilot runs against local Staffroom and can swing to the Tailscale
+    # staging URL once owner sign-in is unblocked.
+    import os as _os
+    from ..platforms.staffroom import StaffroomClient, StaffroomMissionStore
+    _sf_base = _os.environ.get("STAFFROOM_BASE_URL", "http://127.0.0.1:4321")
+    _sf_cookie = _os.environ.get("STAFFROOM_SESSION_COOKIE", "")
+    _sf_bot = _os.environ.get("STAFFROOM_COO_BOT_ID", "bot-coo")
+    app.state.staffroom = StaffroomMissionStore(
+        client=StaffroomClient(_sf_base, session_cookie=_sf_cookie),
+        coo_bot_id=_sf_bot,
+        config_source="env",
+    )
+
+    # Optional cadence loop — stays off by default. Owner flips
+    # STAFFROOM_CADENCE_LOOP=1 after the standing-grant approval in phase C.
+    # Tick is cheap (one SQLite read per registered cadence) and the
+    # dispatch is quantised to the interval window, so an extra tick on
+    # restart cannot spawn duplicates.
+    if _os.environ.get("STAFFROOM_CADENCE_LOOP") == "1":
+        import asyncio as _asyncio
+        _interval_s = int(_os.environ.get("STAFFROOM_CADENCE_TICK_SECONDS", "60"))
+        async def _cadence_loop() -> None:
+            while True:
+                try:
+                    app.state.staffroom.cadence_tick()
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("staffroom cadence tick failed: %s", exc)
+                await _asyncio.sleep(_interval_s)
+        app.state.staffroom_cadence_task = _asyncio.create_task(_cadence_loop())
+        log.info("staffroom cadence loop running (tick every %ds)", _interval_s)
+
     # Instagram checkpoint handler — classifies IG challenge screens and
     # routes them (self_resolve / operator_review / enroll_recovery /
     # retire). Fires a REBALANCER alert on burst.
@@ -654,6 +689,7 @@ def create_app() -> FastAPI:
     application.include_router(warmup_routes.router,         prefix="/api/warmup",           tags=["warmup"])
     application.include_router(scraper_routes.router,        prefix="/api/scraper",          tags=["scraper"])
     application.include_router(strategy_routes.router,       prefix="/api/strategy",         tags=["strategy"])
+    application.include_router(staffroom_routes.router)
     application.include_router(scheduler_pro_routes.router,  prefix="/api/scheduler-pro",    tags=["scheduler-pro"])
     application.include_router(ai_agent_routes.router,       prefix="/api/ai-agent",         tags=["ai-agent"])
     application.include_router(pods_routes.router,           prefix="/api/pods",             tags=["pods"])
