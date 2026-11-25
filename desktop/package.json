@@ -1,0 +1,39 @@
+{
+  "name": "phantom-fleet-desktop",
+  "version": "0.1.0",
+  "description": "Phantom Fleet / OrionFarm desktop shell (Electron)",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:dev": "cross-env PF_TARGET=http://localhost:3016 electron .",
+    "start:prod": "cross-env PF_TARGET=https://app.phantom-fleet.local electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "io.phantomfleet.desktop",
+    "productName": "Phantom Fleet",
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "cross-env": "^7.0.3"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  }
+}
