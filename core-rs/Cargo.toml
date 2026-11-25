@@ -1,0 +1,18 @@
+[package]
+name = "pf-core"
+version = "0.1.0"
+edition = "2021"
+description = "Phantom Fleet deterministic control plane (Rust port of ops/sched)"
+license = "proprietary"
+
+[lib]
+name = "pf_core"
+path = "src/lib.rs"
+
+[dependencies]
+# Deliberately empty. The port stays stdlib-only so there is zero
+# external surface and the resulting .so is trivially auditable.
+# Swap for `rand` only if we need a thread-local CSPRNG; `getrandom`
+# via syscall works today.
+
+[dev-dependencies]
