@@ -1,0 +1,32 @@
+# Phantom Fleet — Linux crontab (production path)
+#
+# Install:
+#     crontab -u pf-fleet ops/cron/crontab.example
+#
+# The PF_ROOT and PF_PY env vars make every line self-contained so a
+# cron that inherits an empty environment still finds the project.
+# PF_LOG points at an append-only NDJSON file; rotate with logrotate.
+#
+# Change these three before installing:
+PF_ROOT=/opt/phantom-fleet-clone
+PF_PY=/opt/phantom-fleet-clone/.venv/bin/python
+PF_LOG=/var/log/phantom-fleet/cron.log
+
+# Hot path: dispatcher drains action_queue every minute.
+* * * * *   cd $PF_ROOT && $PF_PY -m ops.dispatch.worker --apply --max 25 >> $PF_LOG 2>&1
+
+# Account status transitions every 5 minutes.
+*/5 * * * *  cd $PF_ROOT && $PF_PY -m ops.sched.recovery --apply >> $PF_LOG 2>&1
+
+# Proxy rotate / heal every 15 minutes.
+*/15 * * * * cd $PF_ROOT && $PF_PY -m ops.sched.proxy --apply --register trumpproxies_yuge >> $PF_LOG 2>&1
+
+# Fresh-day schedule every 6 hours (will no-op per account outside its
+# 24h lookahead window; cheap).
+0 */6 * * *  cd $PF_ROOT && $PF_PY -m ops.sched.tick --apply >> $PF_LOG 2>&1
+
+# Replacement queue emission every 6 hours.
+15 */6 * * * cd $PF_ROOT && $PF_PY -m ops.sched.replacement --apply >> $PF_LOG 2>&1
+
+# Weekly: sign the audit chain head. Needs PF_AUDIT_SIGNER_KEY in env.
+0 4 * * 1    cd $PF_ROOT && $PF_PY -c 'from ops.intel import chain; print(chain.make_commitment())' >> $PF_LOG 2>&1
