@@ -132,6 +132,42 @@ async def mission_refresh(request: Request, request_id: str) -> dict:
     return rec.as_dict()
 
 
+@router.get("/missions/{request_id}/ghost-preview")
+async def mission_ghost_preview(request: Request, request_id: str) -> dict:
+    """Moonshot #2 — shadow-execution dry run (v1 static).
+
+    Produces an owner-facing preview card BEFORE approval: snapshots the
+    Staffroom DB, scans the brief for expected tool calls, reads Causal
+    Fleet Memory for historical outcome / approval rates on the same
+    workflow, calls simulate_action_sequence for reality-anchored
+    outcome prediction, and flags artifact conflicts.
+
+    Read-only; never spawns a claude subprocess. The v2 upgrade (live
+    fork against the snapshot) will keep this endpoint shape.
+    """
+    import asyncio
+    from ...core.ghost_preview import preview_mission
+    store = _store(request)
+    rec = store.get(request_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="no such mission")
+    mid = rec.staffroom_mission_id
+    if not mid:
+        raise HTTPException(
+            status_code=409,
+            detail="mission has no staffroom_mission_id yet; dispatch must complete first",
+        )
+    # Read the brief from Staffroom's sqlite via the preview helper.
+    import sqlite3
+    from ...core.simulate import _staffroom_db_path
+    with sqlite3.connect(_staffroom_db_path()) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT prompt FROM missions WHERE id=?", (mid,)).fetchone()
+    if not row or not row["prompt"]:
+        raise HTTPException(status_code=404, detail="mission prompt not in Staffroom")
+    return await asyncio.to_thread(preview_mission, mid, row["prompt"])
+
+
 @router.post("/missions/adopt")
 async def mission_adopt(request: Request, body: _AdoptIn) -> dict:
     """Bind an existing Staffroom mission to a Fleet request_id.
