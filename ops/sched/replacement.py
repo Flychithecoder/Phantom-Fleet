@@ -18,41 +18,51 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from ops.sched import _store  # noqa: E402
+from ops.sched._telemetry import instrument  # noqa: E402
 
 
 def run(apply: bool, now_ms: int | None = None) -> dict:
     now_ms = now_ms if now_ms is not None else _store.now_ms()
     _store.apply_migrations()
     emitted: list[dict] = []
-    with _store.connect() as con:
-        rows = con.execute(
-            """
-            SELECT a.id, a.username,
-                   (SELECT reason FROM account_status_history h
-                    WHERE h.account_id = a.id AND h.status = 'dead'
-                    ORDER BY ts_ms DESC LIMIT 1) AS reason
-            FROM accounts a
-            WHERE a.status = 'dead'
-              AND NOT EXISTS (
-                  SELECT 1 FROM replacements_needed r
-                  WHERE r.account_id = a.id AND r.fulfilled_ms IS NULL
-              )
-            ORDER BY a.id
-            """
-        ).fetchall()
-        for row in rows:
-            emitted.append({
-                "account_id": row["id"],
-                "username": row["username"],
-                "reason": row["reason"] or "dead",
-            })
-            if apply:
-                con.execute(
-                    "INSERT INTO replacements_needed "
-                    "(account_id, reason, emitted_ms) VALUES (?, ?, ?)",
-                    (row["id"], row["reason"] or "dead", now_ms),
-                )
-    return {"now_ms": now_ms, "apply": apply, "emitted": emitted}
+    with instrument("replacement", apply=apply) as rec:
+        rec["now_ms"] = now_ms
+        with _store.connect() as con:
+            # Replacement's inputs are a trivial query; capture directly.
+            rec["inputs"] = {"dead_accounts": [dict(r) for r in con.execute(
+                "SELECT id, username FROM accounts WHERE status = 'dead' ORDER BY id"
+            ).fetchall()]}
+            rows = con.execute(
+                """
+                SELECT a.id, a.username,
+                       (SELECT reason FROM account_status_history h
+                        WHERE h.account_id = a.id AND h.status = 'dead'
+                        ORDER BY ts_ms DESC LIMIT 1) AS reason
+                FROM accounts a
+                WHERE a.status = 'dead'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM replacements_needed r
+                      WHERE r.account_id = a.id AND r.fulfilled_ms IS NULL
+                  )
+                ORDER BY a.id
+                """
+            ).fetchall()
+            for row in rows:
+                emitted.append({
+                    "account_id": row["id"],
+                    "username": row["username"],
+                    "reason": row["reason"] or "dead",
+                })
+                if apply:
+                    con.execute(
+                        "INSERT INTO replacements_needed "
+                        "(account_id, reason, emitted_ms) VALUES (?, ?, ?)",
+                        (row["id"], row["reason"] or "dead", now_ms),
+                    )
+        rec["decisions"] = {"emitted": emitted}
+    return {"now_ms": now_ms, "apply": apply, "emitted": emitted,
+            "tick_id": rec.get("tick_id"),
+            "chain_head": rec.get("chain_head")}
 
 
 def main() -> int:

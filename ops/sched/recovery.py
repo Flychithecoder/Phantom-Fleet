@@ -37,6 +37,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from ops.sched import _store  # noqa: E402
+from ops.sched._telemetry import instrument  # noqa: E402
+
+try:
+    from ops.intel import replay as _replay  # noqa: E402
+except ImportError:  # pragma: no cover
+    _replay = None  # type: ignore
 
 
 WINDOW_LOGIN_MS = 24 * 3600 * 1000
@@ -117,38 +123,46 @@ def run(apply: bool, now_ms: int | None = None) -> dict:
     transitions: list[dict] = []
     proxy_signals: list[dict] = []
 
-    with _store.connect() as con:
-        rows = con.execute(
-            "SELECT id, username, status FROM accounts "
-            "WHERE status IN ('alive', 'needs_reset', 'unknown') "
-            "ORDER BY id"
-        ).fetchall()
-        for row in rows:
-            acct = dict(row)
-            decision = evaluate_account(con, acct, now_ms)
-            if not decision:
-                continue
-            if decision.get("proxy_signal"):
-                proxy_signals.append({"account_id": acct["id"],
-                                      "reason": decision["reason"]})
-                continue
-            if decision["status"] == acct["status"]:
-                continue
-            transitions.append({
-                "account_id": acct["id"],
-                "username": acct["username"],
-                "from": acct["status"],
-                "to": decision["status"],
-                "reason": decision["reason"],
-            })
-            if apply:
-                _store.transition_status(
-                    con, acct["id"], decision["status"], decision["reason"],
-                )
+    with instrument("recovery", apply=apply) as rec:
+        rec["now_ms"] = now_ms
+        with _store.connect() as con:
+            if _replay is not None:
+                rec["inputs"] = _replay.snapshot_inputs(con, "recovery")
+            rows = con.execute(
+                "SELECT id, username, status FROM accounts "
+                "WHERE status IN ('alive', 'needs_reset', 'unknown') "
+                "ORDER BY id"
+            ).fetchall()
+            for row in rows:
+                acct = dict(row)
+                decision = evaluate_account(con, acct, now_ms)
+                if not decision:
+                    continue
+                if decision.get("proxy_signal"):
+                    proxy_signals.append({"account_id": acct["id"],
+                                          "reason": decision["reason"]})
+                    continue
+                if decision["status"] == acct["status"]:
+                    continue
+                transitions.append({
+                    "account_id": acct["id"],
+                    "username": acct["username"],
+                    "from": acct["status"],
+                    "to": decision["status"],
+                    "reason": decision["reason"],
+                })
+                if apply:
+                    _store.transition_status(
+                        con, acct["id"], decision["status"], decision["reason"],
+                    )
+        rec["decisions"] = {"transitions": transitions,
+                            "proxy_signals": proxy_signals}
 
     return {
         "now_ms": now_ms, "apply": apply,
         "transitions": transitions, "proxy_signals": proxy_signals,
+        "tick_id": rec.get("tick_id"),
+        "chain_head": rec.get("chain_head"),
     }
 
 

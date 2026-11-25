@@ -29,6 +29,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from ops.sched import _store  # noqa: E402
+from ops.sched._telemetry import instrument  # noqa: E402
+
+try:
+    from ops.intel import replay as _replay  # noqa: E402
+except ImportError:  # pragma: no cover
+    _replay = None  # type: ignore
 
 
 WINDOW_ERR_MS = 2 * 3600 * 1000
@@ -107,32 +113,39 @@ def run(apply: bool, now_ms: int | None = None,
     now_ms = now_ms if now_ms is not None else _store.now_ms()
     _store.apply_migrations()
     decisions: list[dict] = []
-    with _store.connect() as con:
-        for pid in plan_ids or []:
-            _ensure_plan(con, pid)
-        for plan in _plans(con):
-            d = evaluate_plan(con, plan, now_ms)
-            if not d:
-                continue
-            decisions.append(d)
-            if not apply:
-                continue
-            if d["decision"] == "rotate":
-                con.execute(
-                    "UPDATE proxy_state SET "
-                    "blocked_count = blocked_count + 1, "
-                    "last_rotate_ms = ?, last_block_ms = ?, "
-                    "notes = ? WHERE plan_id = ?",
-                    (now_ms, now_ms, d["reason"], d["plan_id"]),
-                )
-            elif d["decision"] == "heal":
-                con.execute(
-                    "UPDATE proxy_state SET "
-                    "blocked_count = MAX(0, blocked_count - 1) "
-                    "WHERE plan_id = ?",
-                    (d["plan_id"],),
-                )
-    return {"now_ms": now_ms, "apply": apply, "decisions": decisions}
+    with instrument("proxy", apply=apply) as rec:
+        rec["now_ms"] = now_ms
+        with _store.connect() as con:
+            for pid in plan_ids or []:
+                _ensure_plan(con, pid)
+            if _replay is not None:
+                rec["inputs"] = _replay.snapshot_inputs(con, "proxy")
+            for plan in _plans(con):
+                d = evaluate_plan(con, plan, now_ms)
+                if not d:
+                    continue
+                decisions.append(d)
+                if not apply:
+                    continue
+                if d["decision"] == "rotate":
+                    con.execute(
+                        "UPDATE proxy_state SET "
+                        "blocked_count = blocked_count + 1, "
+                        "last_rotate_ms = ?, last_block_ms = ?, "
+                        "notes = ? WHERE plan_id = ?",
+                        (now_ms, now_ms, d["reason"], d["plan_id"]),
+                    )
+                elif d["decision"] == "heal":
+                    con.execute(
+                        "UPDATE proxy_state SET "
+                        "blocked_count = MAX(0, blocked_count - 1) "
+                        "WHERE plan_id = ?",
+                        (d["plan_id"],),
+                    )
+        rec["decisions"] = {"decisions": decisions}
+    return {"now_ms": now_ms, "apply": apply, "decisions": decisions,
+            "tick_id": rec.get("tick_id"),
+            "chain_head": rec.get("chain_head")}
 
 
 def main() -> int:

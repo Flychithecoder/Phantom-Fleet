@@ -26,7 +26,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from ops.sched import _store  # noqa: E402
+from ops.sched._telemetry import instrument  # noqa: E402
 from ops.sched.warming import schedule_day, summarise  # noqa: E402
+
+try:
+    from ops.intel import replay as _replay  # noqa: E402
+except ImportError:  # pragma: no cover
+    _replay = None  # type: ignore
 
 
 LOOKAHEAD_MS = 24 * 3600 * 1000
@@ -75,43 +81,50 @@ def tick(apply: bool, now_ms: int | None = None, limit: int | None = None) -> di
               "actions_enqueued": 0, "skipped_already_queued": 0}
     per_account: list[dict] = []
 
-    with _store.connect() as con:
-        due = accounts_due(con, now_ms)
-        if limit:
-            due = due[:limit]
-        for acct in due:
-            totals["accounts_considered"] += 1
-            if future_queued_count(con, acct["id"], now_ms) > 0:
-                totals["skipped_already_queued"] += 1
-                per_account.append({**acct, "skipped": "already_queued"})
-                continue
-            actions = schedule_day(
-                warming_day=acct["warming_day"],
-                now_ms=now_ms,
-                persona_tz=acct["tz"],
-                peak_hour=acct["peak_hour"],
-            )
-            if apply:
-                for a in actions:
-                    _store.enqueue(
-                        con, acct["id"], a.kind, a.due_ms, a.params,
-                    )
-                con.execute(
-                    "INSERT INTO account_schedule_state "
-                    "(account_id, warming_day, last_tick_ms) "
-                    "VALUES (?, ?, ?) "
-                    "ON CONFLICT(account_id) DO UPDATE SET "
-                    "warming_day = excluded.warming_day, "
-                    "last_tick_ms = excluded.last_tick_ms",
-                    (acct["id"], acct["warming_day"] + 1, now_ms),
+    with instrument("scheduler", apply=apply) as rec:
+        rec["now_ms"] = now_ms
+        with _store.connect() as con:
+            if _replay is not None:
+                rec["inputs"] = _replay.snapshot_inputs(con, "scheduler")
+            due = accounts_due(con, now_ms)
+            if limit:
+                due = due[:limit]
+            for acct in due:
+                totals["accounts_considered"] += 1
+                if future_queued_count(con, acct["id"], now_ms) > 0:
+                    totals["skipped_already_queued"] += 1
+                    per_account.append({**acct, "skipped": "already_queued"})
+                    continue
+                actions = schedule_day(
+                    warming_day=acct["warming_day"],
+                    now_ms=now_ms,
+                    persona_tz=acct["tz"],
+                    peak_hour=acct["peak_hour"],
                 )
-            totals["accounts_scheduled"] += 1
-            totals["actions_enqueued"] += len(actions)
-            per_account.append({**acct, **summarise(actions)})
+                if apply:
+                    for a in actions:
+                        _store.enqueue(
+                            con, acct["id"], a.kind, a.due_ms, a.params,
+                        )
+                    con.execute(
+                        "INSERT INTO account_schedule_state "
+                        "(account_id, warming_day, last_tick_ms) "
+                        "VALUES (?, ?, ?) "
+                        "ON CONFLICT(account_id) DO UPDATE SET "
+                        "warming_day = excluded.warming_day, "
+                        "last_tick_ms = excluded.last_tick_ms",
+                        (acct["id"], acct["warming_day"] + 1, now_ms),
+                    )
+                totals["accounts_scheduled"] += 1
+                totals["actions_enqueued"] += len(actions)
+                per_account.append({**acct, **summarise(actions)})
+        rec["decisions"] = {"totals": totals, "per_account": per_account}
 
     return {
         "now_ms": now_ms, "apply": apply,
         "totals": totals, "per_account": per_account,
+        "tick_id": rec.get("tick_id"),
+        "chain_head": rec.get("chain_head"),
     }
 
 
