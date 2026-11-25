@@ -89,6 +89,8 @@ export function staffroomMcpSpawn() {
     "mcp__staffroom__staffroom_recall_similar",
     "mcp__staffroom__staffroom_recall_contradictions",
     "mcp__staffroom__staffroom_recall_lineage",
+    "mcp__staffroom__phantom_fleet_simulate_shape",
+    "mcp__staffroom__phantom_fleet_simulate_actions",
     "mcp__staffroom__staffroom_list_computers",
     "mcp__staffroom__staffroom_discover_tools",
     "mcp__staffroom__staffroom_tool_details",
