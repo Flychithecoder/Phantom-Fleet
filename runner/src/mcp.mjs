@@ -103,6 +103,7 @@ export function staffroomMcpSpawn() {
     "mcp__staffroom__staffroom_route_recommendation",
     "mcp__staffroom__staffroom_safety_critique",
     "mcp__staffroom__staffroom_safety_rules",
+    "mcp__staffroom__staffroom_compose_mission",
     "mcp__staffroom__staffroom_list_computers",
     "mcp__staffroom__staffroom_discover_tools",
     "mcp__staffroom__staffroom_tool_details",
