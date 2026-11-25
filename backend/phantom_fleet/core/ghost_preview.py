@@ -87,15 +87,25 @@ def _read_audit_log(path: Path, limit_bytes: int = 2_000_000) -> list[dict]:
 def _cost_latency_history(workflow: str | None) -> dict[str, Any]:
     """Aggregate historical cost + latency per workflow from the runner
     audit log. Groups by vendor so the preview can say "Claude: $0.11
-    median / 38s; GLM-plan: $0.00 flat / 42s median"."""
+    median / 38s; GLM-plan: $0.00 flat / 42s median".
+
+    Since v1.5+ the runner tags each audit row with `workflow` and
+    `fleet_request_id` by parsing the "[fleet request_id=…]" header the
+    Fleet injects into every prompt. When `workflow` is given, we filter
+    to matching rows; otherwise aggregate across all workflows as the
+    conservative upper bound.
+    """
     rows = _read_audit_log(_runner_audit_path())
     if not rows:
         return {"sample_size": 0, "note": "runner audit log empty or missing"}
-    # We can't tie an audit row back to a specific workflow without a
-    # join key; the audit log doesn't carry the Fleet request_id. What
-    # it DOES carry is prompt_hash. For v1.5 we aggregate ACROSS all
-    # calls as a conservative upper bound; v2 will plumb the request_id
-    # through as an audit field for precise workflow attribution.
+    all_rows = rows
+    if workflow:
+        filtered = [r for r in rows if r.get("workflow") == workflow]
+        # Don't fall back silently — surface that the filter left nothing,
+        # so the preview UI can decide whether to show aggregate-across-
+        # workflows as a secondary signal.
+        if filtered:
+            rows = filtered
     by_vendor: dict[str, list[dict]] = {}
     for r in rows:
         v = _bearer_to_vendor(r.get("bearer_tail", ""))
@@ -120,6 +130,11 @@ def _cost_latency_history(workflow: str | None) -> dict[str, Any]:
     if total_costs:
         result["projected_cost_usd_median"] = round(statistics.median(total_costs), 4)
         result["projected_cost_usd_p95"] = round(_p95(total_costs), 4)
+    result["filter"] = {
+        "workflow": workflow,
+        "rows_matched": len(rows),
+        "rows_total": len(all_rows),
+    }
     return result
 
 
@@ -211,33 +226,62 @@ def _scan_prompt(prompt: str) -> dict[str, Any]:
         signals.append("billing_hint")
     if re.search(r"\bpublish|post|dm\b", prompt, re.I):
         signals.append("external_publish_hint")
+    # Every call to staffroom_propose_work creates one new artifact.
+    # recall_* / read_* / list_* / get_* are read-only and create none.
+    # Assignments also implicitly create artifacts via each worker's
+    # own propose_work call downstream. Bound the estimate to plausible
+    # values so a mis-counted prompt doesn't scare the owner.
+    propose_count = by_tool.get("staffroom_propose_work", 0)
+    predicted_artifacts = propose_count + max(assignments, 0)
     return {
         "workflow": workflow,
         "distinct_tools_referenced": len(by_tool),
         "tool_calls_expected": len(hits),
         "tool_breakdown": dict(by_tool.most_common()),
         "assignments_hinted": assignments,
+        "predicted_artifacts_created": predicted_artifacts,
+        "artifact_prediction_note": (
+            f"Estimated from staffroom_propose_work×{propose_count} "
+            f"+ {assignments} assignment(s). v2 live-fork will give the exact count."
+        ),
         "cited_artifact_ids": cited_artifacts,
         "policy_signals": signals,
     }
 
 
-def _snapshot_gc(keep_last: int = 20) -> dict[str, Any]:
+def _snapshot_gc(keep_last: int = 20, warn_mb: int = 500) -> dict[str, Any]:
     """Keep only the N most recent snapshots so disk stays bounded.
     Runs lazily on each preview call; cheap because it just stat()s
-    the ghost-snapshots directory."""
+    the ghost-snapshots directory. Emits a `warn` field when the
+    retained set exceeds `warn_mb` so an operator sees pressure before
+    it becomes a disk-full incident."""
     base = Path(os.environ.get(
         "GHOST_PREVIEW_SNAPSHOT_DIR",
         str(Path(__file__).resolve().parents[2] / ".data" / "ghost-snapshots"),
     ))
     if not base.exists():
-        return {"removed": 0, "kept": 0}
+        return {"removed": 0, "kept": 0, "retained_mb": 0, "warn": None}
     files = sorted(base.glob("ghost-*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True)
     removed = 0
     for old in files[keep_last:]:
         try: old.unlink(); removed += 1
         except OSError: pass
-    return {"removed": removed, "kept": min(len(files), keep_last)}
+    retained = files[:keep_last]
+    retained_bytes = sum((p.stat().st_size for p in retained), 0)
+    retained_mb = retained_bytes // (1024 * 1024)
+    warn = None
+    if retained_mb >= warn_mb:
+        warn = (
+            f"ghost-snapshots dir is {retained_mb}MB across {len(retained)} "
+            f"files (threshold {warn_mb}MB). Lower GHOST_PREVIEW_KEEP or "
+            f"prune backend/.data/ghost-snapshots manually."
+        )
+    return {
+        "removed": removed,
+        "kept": len(retained),
+        "retained_mb": retained_mb,
+        "warn": warn,
+    }
 
 
 def _historical_cost(workflow: str | None, snapshot_db: Path) -> dict[str, Any]:
@@ -279,6 +323,58 @@ def _historical_cost(workflow: str | None, snapshot_db: Path) -> dict[str, Any]:
             "into the memory row."
         ),
     }
+
+
+def _pending_collisions(
+    this_mission_id: str,
+    plan: dict[str, Any],
+    snapshot_db: Path,
+) -> list[dict[str, Any]]:
+    """Scan other missions in needs_approval state. If any of them share
+    the same workflow OR cite the same artifact IDs OR target the same
+    bot_id, surface the collision so the owner can serialize approvals
+    instead of double-dispatching into a race.
+    """
+    if not snapshot_db.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        with sqlite3.connect(snapshot_db) as con:
+            con.row_factory = sqlite3.Row
+            others = con.execute(
+                """SELECT id, bot_id, prompt, created_at
+                     FROM missions
+                    WHERE status = 'needs_approval'
+                      AND id != ?
+                    ORDER BY created_at DESC LIMIT 25""",
+                (this_mission_id,),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    my_arts = set(plan.get("cited_artifact_ids") or [])
+    my_wf = plan.get("workflow")
+    for r in others:
+        other_prompt = r["prompt"] or ""
+        other_scan = _scan_prompt(other_prompt)
+        reasons: list[str] = []
+        if my_wf and my_wf == other_scan.get("workflow"):
+            reasons.append(f"same workflow '{my_wf}'")
+        shared_arts = my_arts & set(other_scan.get("cited_artifact_ids") or [])
+        if shared_arts:
+            reasons.append(f"shared artifact refs: {sorted(shared_arts)}")
+        if reasons:
+            out.append({
+                "mission_id": r["id"],
+                "bot_id": r["bot_id"],
+                "created_at": r["created_at"],
+                "reasons": reasons,
+                "note": (
+                    "Both missions sit in needs_approval. Approving both "
+                    "could race on shared state; approve one, let it "
+                    "complete, then re-run this preview on the other."
+                ),
+            })
+    return out
 
 
 def _scan_conflicts(cited_ids: list[str], snapshot_db: Path) -> list[ArtifactConflict]:
@@ -338,6 +434,9 @@ def preview_mission(mission_id: str, prompt: str) -> dict[str, Any]:
         plan["cited_artifact_ids"],
         snapshot_file if snap["ok"] else live_db,
     )
+    collisions = _pending_collisions(
+        mission_id, plan, snapshot_file if snap["ok"] else live_db,
+    )
     return {
         "method": "static",
         "mission_id": mission_id,
@@ -359,6 +458,7 @@ def preview_mission(mission_id: str, prompt: str) -> dict[str, Any]:
              "last_updated": c.last_updated, "note": c.note}
             for c in conflicts
         ],
+        "pending_collisions": collisions,
         "total_duration_ms": int((time.monotonic() - t0) * 1000),
         "upgrade_path": (
             "v2 will spawn a real claude subprocess against the snapshot "

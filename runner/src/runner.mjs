@@ -115,6 +115,17 @@ function release() {
 
 function sha(s) { return createHash("sha256").update(s).digest("hex").slice(0, 16); }
 
+// The Fleet always embeds its request_id + workflow tag in the first
+// line of every prompt it dispatches: "[fleet request_id=pf-<workflow>-<hash>]".
+// Extract both for the audit log so a ghost preview can later filter
+// cost/latency history by workflow instead of aggregating everything.
+const WORKFLOW_TAG_RE = /pf-([a-z_]+)-([a-f0-9]+)/;
+function extractFleetTag(prompt) {
+  const m = WORKFLOW_TAG_RE.exec(prompt || "");
+  if (!m) return { workflow: null, request_id: null };
+  return { workflow: m[1], request_id: `pf-${m[1]}-${m[2]}` };
+}
+
 function audit(entry) {
   try {
     appendFileSync(AUDIT, JSON.stringify({ t: new Date().toISOString(), ...entry }) + "\n");
@@ -321,12 +332,15 @@ async function handleChat(req, res) {
     const effectiveModel = parsed.model || pinnedModel;
     const usage = parsed.usage || {};
     const responseHash = sha(content);
+    const fleetTag = extractFleetTag(prompt);
     audit({
       event: "ok",
       bearer_tail: bearer.slice(-4),
       requested_model: payload.model || null,
       pinned_model: pinnedModel,
       effective_model: effectiveModel,
+      workflow: fleetTag.workflow,
+      fleet_request_id: fleetTag.request_id,
       prompt_hash: promptHash,
       prompt_chars: prompt.length,
       response_hash: responseHash,
