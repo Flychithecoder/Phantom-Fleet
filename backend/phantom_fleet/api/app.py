@@ -51,6 +51,7 @@ from .routes import scraper as scraper_routes
 from .routes import strategy as strategy_routes
 from .routes import staffroom_missions as staffroom_routes
 from .routes import simulate as simulate_routes
+from .routes import time_machine as time_machine_routes
 from .routes import scheduler_pro as scheduler_pro_routes
 from .routes import ai_agent_routes
 from .routes import pods as pods_routes
@@ -692,6 +693,7 @@ def create_app() -> FastAPI:
     application.include_router(strategy_routes.router,       prefix="/api/strategy",         tags=["strategy"])
     application.include_router(staffroom_routes.router)
     application.include_router(simulate_routes.router)
+    application.include_router(time_machine_routes.router)
     application.include_router(scheduler_pro_routes.router,  prefix="/api/scheduler-pro",    tags=["scheduler-pro"])
     application.include_router(ai_agent_routes.router,       prefix="/api/ai-agent",         tags=["ai-agent"])
     application.include_router(pods_routes.router,           prefix="/api/pods",             tags=["pods"])

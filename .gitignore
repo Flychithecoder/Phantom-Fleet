@@ -31,3 +31,4 @@ Thumbs.db
 # Local-only files (per-dev credentials, local overrides)
 *.local.md
 **/*.local.md
+backend/.data/time-machine/
