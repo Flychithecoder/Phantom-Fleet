@@ -24,16 +24,111 @@ no device touch, no mutation of mission_memory or artifacts.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import sqlite3
+import statistics
 import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .simulate import simulate_action_sequence, _staffroom_db_path
+
+
+# Runner audit log — source of truth for per-call cost + latency. Lives
+# on the Fleet side at runner/logs/runner-audit.ndjson. Each line is a
+# {event, pinned_model, bearer_tail, cost_usd, duration_ms, ...} record.
+def _runner_audit_path() -> Path:
+    env = os.environ.get("PF_RUNNER_AUDIT_PATH")
+    if env:
+        return Path(env)
+    return Path(__file__).resolve().parents[3] / "runner" / "logs" / "runner-audit.ndjson"
+
+
+def _bearer_to_vendor(bearer_tail: str) -> str:
+    """Runner only logs the last 4 chars of the bearer. Map common suffixes
+    to vendors. pf-opus → 'opus', pf-sonnet → 'onet', pf-glm-plan → 'plan',
+    pf-glm-plan-max → '-max'. 'local' bearer logs as 'ocal'."""
+    m = {
+        "opus": ("anthropic", "claude-opus-4-7"),
+        "onet": ("anthropic", "claude-sonnet-4-6"),
+        "plan": ("zai", "glm-plan"),
+        "-max": ("zai", "glm-plan-max"),
+        "ocal": ("anthropic", "auto"),
+    }
+    return m.get(bearer_tail, ("unknown", "unknown"))[0]
+
+
+def _read_audit_log(path: Path, limit_bytes: int = 2_000_000) -> list[dict]:
+    """Stream the last ~2MB of the audit ndjson so a 100MB log stays
+    cheap to parse. Lines must be valid JSON; malformed lines skipped."""
+    if not path.exists():
+        return []
+    out: list[dict] = []
+    size = path.stat().st_size
+    with path.open("rb") as f:
+        if size > limit_bytes:
+            f.seek(size - limit_bytes)
+            f.readline()  # discard partial first line
+        for raw in f:
+            try:
+                row = json.loads(raw)
+                if isinstance(row, dict) and row.get("event") == "ok":
+                    out.append(row)
+            except Exception:  # noqa: BLE001
+                continue
+    return out
+
+
+def _cost_latency_history(workflow: str | None) -> dict[str, Any]:
+    """Aggregate historical cost + latency per workflow from the runner
+    audit log. Groups by vendor so the preview can say "Claude: $0.11
+    median / 38s; GLM-plan: $0.00 flat / 42s median"."""
+    rows = _read_audit_log(_runner_audit_path())
+    if not rows:
+        return {"sample_size": 0, "note": "runner audit log empty or missing"}
+    # We can't tie an audit row back to a specific workflow without a
+    # join key; the audit log doesn't carry the Fleet request_id. What
+    # it DOES carry is prompt_hash. For v1.5 we aggregate ACROSS all
+    # calls as a conservative upper bound; v2 will plumb the request_id
+    # through as an audit field for precise workflow attribution.
+    by_vendor: dict[str, list[dict]] = {}
+    for r in rows:
+        v = _bearer_to_vendor(r.get("bearer_tail", ""))
+        by_vendor.setdefault(v, []).append(r)
+    result: dict[str, Any] = {"sample_size": len(rows), "by_vendor": {}}
+    total_costs: list[float] = []
+    for vendor, calls in by_vendor.items():
+        costs = [float(c.get("cost_usd") or 0) for c in calls]
+        durs = [int(c.get("duration_ms") or 0) for c in calls]
+        if not costs:
+            continue
+        total_costs.extend(costs)
+        result["by_vendor"][vendor] = {
+            "calls": len(calls),
+            "median_cost_usd": round(statistics.median(costs), 4),
+            "mean_cost_usd": round(statistics.mean(costs), 4),
+            "p95_cost_usd": round(_p95(costs), 4),
+            "median_duration_ms": int(statistics.median(durs)) if durs else None,
+            "p95_duration_ms": int(_p95(durs)) if durs else None,
+        }
+    # Overall projection — the preview shows one headline number.
+    if total_costs:
+        result["projected_cost_usd_median"] = round(statistics.median(total_costs), 4)
+        result["projected_cost_usd_p95"] = round(_p95(total_costs), 4)
+    return result
+
+
+def _p95(xs: list[float] | list[int]) -> float:
+    if not xs:
+        return 0.0
+    s = sorted(xs)
+    idx = max(0, min(len(s) - 1, int(0.95 * len(s))))
+    return s[idx]
 
 
 # Regex catalogue — mirrors the allow-list in runner/src/mcp.mjs.
@@ -102,21 +197,47 @@ def _take_snapshot(src: Path, dst: Path) -> dict[str, Any]:
 
 def _scan_prompt(prompt: str) -> dict[str, Any]:
     """Static analysis — what will the mission probably do?"""
-    tools = sorted(set(_TOOL_PATTERN.findall(prompt)))
-    # The regex captures the suffix after the prefix; turn each hit back
-    # into a canonical tool name a human can read.
-    tool_calls_expected = len(_TOOL_PATTERN.findall(prompt))
+    hits = _TOOL_PATTERN.findall(prompt)
+    by_tool = Counter(hits)
     assignments = len(_ASSIGNMENT_PATTERN.findall(prompt))
     wf_match = _WORKFLOW_PATTERN.search(prompt)
     workflow = wf_match.group(1) if wf_match else None
     cited_artifacts = sorted(set(m.lower() for m in _ARTIFACT_REF_PATTERN.findall(prompt)))
+    # Policy signals — surface anything owner would care about for approval.
+    signals = []
+    if re.search(r"\b(flash|factory[- ]reset|wipe)\b", prompt, re.I):
+        signals.append("device_destructive_hint")
+    if re.search(r"\bpurchase|checkout|charge|invoice|bill\b", prompt, re.I):
+        signals.append("billing_hint")
+    if re.search(r"\bpublish|post|dm\b", prompt, re.I):
+        signals.append("external_publish_hint")
     return {
         "workflow": workflow,
-        "distinct_tools_referenced": len(tools),
-        "tool_calls_expected": tool_calls_expected,
+        "distinct_tools_referenced": len(by_tool),
+        "tool_calls_expected": len(hits),
+        "tool_breakdown": dict(by_tool.most_common()),
         "assignments_hinted": assignments,
         "cited_artifact_ids": cited_artifacts,
+        "policy_signals": signals,
     }
+
+
+def _snapshot_gc(keep_last: int = 20) -> dict[str, Any]:
+    """Keep only the N most recent snapshots so disk stays bounded.
+    Runs lazily on each preview call; cheap because it just stat()s
+    the ghost-snapshots directory."""
+    base = Path(os.environ.get(
+        "GHOST_PREVIEW_SNAPSHOT_DIR",
+        str(Path(__file__).resolve().parents[2] / ".data" / "ghost-snapshots"),
+    ))
+    if not base.exists():
+        return {"removed": 0, "kept": 0}
+    files = sorted(base.glob("ghost-*.sqlite"), key=lambda p: p.stat().st_mtime, reverse=True)
+    removed = 0
+    for old in files[keep_last:]:
+        try: old.unlink(); removed += 1
+        except OSError: pass
+    return {"removed": removed, "kept": min(len(files), keep_last)}
 
 
 def _historical_cost(workflow: str | None, snapshot_db: Path) -> dict[str, Any]:
@@ -207,8 +328,10 @@ def preview_mission(mission_id: str, prompt: str) -> dict[str, Any]:
     live_db = _staffroom_db_path()
     snapshot_file = _snapshot_path(mission_id)
     snap = _take_snapshot(live_db, snapshot_file)
+    gc_stats = _snapshot_gc()
     plan = _scan_prompt(prompt)
     history = _historical_cost(plan["workflow"], snapshot_file if snap["ok"] else live_db)
+    cost_latency = _cost_latency_history(plan["workflow"])
     # Compose with simulate #5 — reality-anchored outcome prediction.
     outcome = simulate_action_sequence(brief=prompt, limit=5, cohort_hint=plan["workflow"])
     conflicts = _scan_conflicts(
@@ -219,8 +342,10 @@ def preview_mission(mission_id: str, prompt: str) -> dict[str, Any]:
         "method": "static",
         "mission_id": mission_id,
         "snapshot": snap,
+        "snapshot_gc": gc_stats,
         "plan": plan,
         "history": history,
+        "cost_latency": cost_latency,
         "outcome_prediction": {
             "sample_size": outcome["sample_size"],
             "confidence": outcome["confidence"],
