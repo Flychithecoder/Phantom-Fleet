@@ -1,0 +1,25 @@
+{
+  "farm_id": "farm1",
+  "network": {"ssid": "715", "subnet": "10.0.0.0/24", "adb_port": 5555},
+  "devices": [
+    {"serial": "53c8e3ad1b3f7ece", "model": "SM_G770U1", "region": "US"},
+    {"serial": "RF8N10B574B", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N10J56NB", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N10J57DA", "model": "SM_G770F", "region": "EU", "reference": true},
+    {"serial": "RF8N11BB1MN", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N20VWNHM", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N21A0X5Y", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N3075H7Y", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N30B5FAD", "model": "SM_G770F", "region": "EU", "auth_pending": true},
+    {"serial": "RF8N4057ELK", "model": "SM_G770U1", "region": "US"},
+    {"serial": "RF8N406NLWK", "model": "SM_G770F", "region": "EU", "auth_pending": true},
+    {"serial": "RF8N501E82B", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N50EM1WK", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N61Z9FZB", "model": "SM_G770U1", "region": "US"},
+    {"serial": "RF8N70R01XT", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N71RBF2H", "model": "SM_G770F", "region": "EU"},
+    {"serial": "RF8N81VR6DT", "model": "SM_G770U1", "region": "US"},
+    {"serial": "RF8N81XYX4J", "model": "SM_G770U1", "region": "US"},
+    {"serial": "RF8N90FZ0LV", "model": "SM_G770F", "region": "EU", "auth_pending": true}
+  ]
+}
