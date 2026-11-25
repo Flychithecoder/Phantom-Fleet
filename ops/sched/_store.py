@@ -14,15 +14,34 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Iterator
 
-STORE = (
+# ---------------------------------------------------------------------------
+# Backend switch
+# ---------------------------------------------------------------------------
+#
+# Phase 0 shipped on SQLite. Phase 1 points at Postgres 16 (locked in
+# .claude/CLAUDE.md). The function signatures below are preserved so
+# every caller keeps compiling; the actual implementation is chosen at
+# import time from ``PF_STORE``:
+#
+#     PF_STORE=sqlite     (default; legacy path, this file)
+#     PF_STORE=postgres   (re-export the pg symbols from _store_pg)
+#
+# The re-export happens at module bottom so the SQLite code stays
+# available for unit tests that explicitly want the file-backed store.
+
+PF_STORE_BACKEND = os.environ.get("PF_STORE", "sqlite").strip().lower()
+
+SQLITE_STORE = (
     Path(__file__).resolve().parent.parent.parent
     / "backend" / ".data" / "persona-store.sqlite"
 )
+STORE: Any = SQLITE_STORE
 
 # Additive migrations.  Every ALTER is guarded with IF-NOT-EXISTS-style
 # idempotency so `apply_migrations()` is safe on first run, re-run, and
@@ -328,4 +347,51 @@ def record_result(
         "UPDATE action_queue SET state = ?, attempts = attempts + 1 "
         "WHERE id = ?",
         (new_state, action_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Backend-specific helpers (SQLite branch)
+# ---------------------------------------------------------------------------
+
+def claim_lock_clause() -> str:
+    """SQLite doesn't support SELECT ... FOR UPDATE SKIP LOCKED.
+
+    Under the single-writer / BEGIN IMMEDIATE regime it ships with,
+    the SELECT → UPDATE pair inside `ops/dispatch/_transport.claim`
+    races only with other processes, and SQLite's whole-DB write lock
+    serialises them. So we return the empty string — the dispatcher
+    adds no suffix on this backend.
+    """
+    return ""
+
+
+def is_postgres() -> bool:
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Resolve backend at import time
+# ---------------------------------------------------------------------------
+
+if PF_STORE_BACKEND == "postgres":
+    # Replace every public symbol with the pg equivalent. Callers that
+    # already did `from ops.sched._store import connect, STORE, ...`
+    # keep working because they imported what this module exported at
+    # import time.
+    from ops.sched import _store_pg as _pg
+
+    STORE = _pg.STORE
+    apply_migrations = _pg.apply_migrations  # type: ignore[assignment]
+    connect = _pg.connect                    # type: ignore[assignment]
+    now_ms = _pg.now_ms                      # type: ignore[assignment]
+    enqueue = _pg.enqueue                    # type: ignore[assignment]
+    record_result = _pg.record_result        # type: ignore[assignment]
+    transition_status = _pg.transition_status  # type: ignore[assignment]
+    claim_lock_clause = _pg.claim_lock_clause  # type: ignore[assignment]
+    is_postgres = _pg.is_postgres              # type: ignore[assignment]
+elif PF_STORE_BACKEND not in ("sqlite", ""):
+    raise RuntimeError(
+        f"PF_STORE={PF_STORE_BACKEND!r} is not a known backend. "
+        "Set PF_STORE=sqlite (default) or PF_STORE=postgres."
     )

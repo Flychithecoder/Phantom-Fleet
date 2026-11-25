@@ -20,6 +20,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from ops.sched import _store
+
 
 def resolve_device(con: sqlite3.Connection, serial: str) -> tuple[str, int] | None:
     row = con.execute(
@@ -65,8 +67,17 @@ def claim(con: sqlite3.Connection, limit: int, now_ms: int) -> list[dict]:
     dispatch leaves the row in 'claimed'; `sweep_stale_claims` reaps
     those older than a threshold.
     """
+    # On Postgres `_store.claim_lock_clause()` returns
+    # " FOR UPDATE SKIP LOCKED" — rows the SELECT returns are row-locked
+    # for the duration of this transaction, so a second worker running
+    # the same query in parallel skips them and picks the next due_ms.
+    # The subsequent UPDATE still has to see them in 'due' state, which
+    # it does because no committed transition has happened yet. On
+    # SQLite the suffix is empty and the DB-wide write lock serialises
+    # the two workers instead.
+    lock_suffix = _store.claim_lock_clause()
     rows = con.execute(
-        """
+        f"""
         SELECT q.id, q.account_id, q.kind, q.due_ms, q.params_json,
                a.username, a.device_serial, a.status AS account_status,
                c.clone_package
@@ -76,7 +87,7 @@ def claim(con: sqlite3.Connection, limit: int, now_ms: int) -> list[dict]:
         WHERE q.state = 'due' AND q.due_ms <= ?
           AND a.status = 'alive'
         ORDER BY q.due_ms ASC
-        LIMIT ?
+        LIMIT ?{lock_suffix}
         """,
         (now_ms, limit),
     ).fetchall()
