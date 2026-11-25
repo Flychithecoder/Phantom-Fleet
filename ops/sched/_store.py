@@ -150,6 +150,26 @@ MIGRATIONS = [
         FOREIGN KEY (account_id) REFERENCES accounts(id)
     );
     """,
+    # Dispatcher-facing: which clone package drives this account, and
+    # where the device answers HTTP. Both nullable so Onimator migration
+    # can land accounts before the dispatcher knows how to reach them.
+    """
+    CREATE TABLE IF NOT EXISTS clone_assignments (
+        account_id INTEGER PRIMARY KEY,
+        clone_package TEXT NOT NULL,
+        assigned_ms INTEGER NOT NULL,
+        FOREIGN KEY (account_id) REFERENCES accounts(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS device_endpoints (
+        serial TEXT PRIMARY KEY,
+        wifi_ip TEXT,
+        port INTEGER NOT NULL DEFAULT 8080,
+        last_seen_ms INTEGER,
+        FOREIGN KEY (serial) REFERENCES devices(serial)
+    );
+    """,
 ]
 
 
