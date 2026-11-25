@@ -263,9 +263,10 @@ def _run_live(serial: str, port: int) -> int:
     # 3. seed one queue row and drain.
     qid = _seed_fleet(port)
     print(f"  seeded queue row id={qid}; draining 1 row...")
-    report = worker.drain(apply=True, max_rows=1)
+    report = worker.run(apply=True, max_actions=1)
     print(f"  drain report: {json.dumps(report, indent=2)}")
-    return 0 if report and report[0].get("outcome") == "ok" else 4
+    results = report.get("results") or []
+    return 0 if results and results[0].get("outcome") == "ok" else 4
 
 
 # ---------- entry point ----------

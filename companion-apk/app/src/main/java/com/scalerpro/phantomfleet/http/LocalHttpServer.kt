@@ -53,7 +53,7 @@ class LocalHttpServer(
     private val igEngagementHandler: IGEngagementHandler,
     private val threadsHandler: ThreadsActionHandler,
     private val virtualCamera: VirtualCameraService,
-    private val port: Int = 8090
+    private val port: Int = 8089
 ) {
     private val TAG = "PhantomHTTP"
     private var engine: io.ktor.server.engine.ApplicationEngine? = null
