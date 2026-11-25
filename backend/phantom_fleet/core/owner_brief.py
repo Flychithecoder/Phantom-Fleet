@@ -168,6 +168,24 @@ def _signal_recent_forks() -> dict[str, Any]:
         return _s("error", error=str(e)[:200])
 
 
+def _signal_pending_target_approvals() -> dict[str, Any]:
+    try:
+        from . import targets_admission as ta
+        rows = ta.list_pending_targets(limit=20)
+        return _s("ok" if rows else "no_data", rows)
+    except Exception as e:
+        return _s("error", error=str(e)[:200])
+
+
+def _signal_pending_comment_approvals() -> dict[str, Any]:
+    try:
+        from . import targets_admission as ta
+        rows = ta.list_pending_comments(limit=20)
+        return _s("ok" if rows else "no_data", rows)
+    except Exception as e:
+        return _s("error", error=str(e)[:200])
+
+
 _SIGNAL_RUNNERS = [
     ("pending_tool_proposals", _signal_pending_tool_proposals),
     ("stale_approvals", _signal_stale_approvals),
@@ -175,6 +193,8 @@ _SIGNAL_RUNNERS = [
     ("contradictions_flagged", _signal_contradictions_flagged),
     ("snapshot_pressure", _signal_snapshot_pressure),
     ("recent_forks", _signal_recent_forks),
+    ("pending_target_approvals", _signal_pending_target_approvals),
+    ("pending_comment_approvals", _signal_pending_comment_approvals),
 ]
 
 
@@ -204,6 +224,10 @@ def owner_brief() -> dict[str, Any]:
         headline_parts.append(f"{signals['contradictions_flagged']['count']} contradiction(s)")
     if signals["snapshot_pressure"]["count"]:
         headline_parts.append("snapshot pressure")
+    if signals["pending_target_approvals"]["count"]:
+        headline_parts.append(f"{signals['pending_target_approvals']['count']} target(s) to approve")
+    if signals["pending_comment_approvals"]["count"]:
+        headline_parts.append(f"{signals['pending_comment_approvals']['count']} comment(s) to approve")
     headline = "; ".join(headline_parts) if headline_parts else "all quiet"
     return {
         "headline": headline,

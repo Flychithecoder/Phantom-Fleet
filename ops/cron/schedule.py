@@ -26,6 +26,12 @@ class Job:
 
 JOBS: tuple[Job, ...] = (
     Job(
+        "target_hydrate",
+        interval_s=30,
+        argv=("python", "-m", "ops.targets.hydrator", "--apply", "--max", "200"),
+        description="Fill target params on due queue rows before dispatch picks them up.",
+    ),
+    Job(
         "dispatch",
         interval_s=60,
         argv=("python", "-m", "ops.dispatch.worker", "--apply", "--max", "25"),

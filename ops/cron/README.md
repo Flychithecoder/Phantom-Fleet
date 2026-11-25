@@ -6,6 +6,7 @@ One canonical schedule, three ways to run it.
 
 | Job | Interval | What |
 |---|---|---|
+| `target_hydrate` | **30 s** | `ops.targets.hydrator --apply --max 200` fills targetUsername/mediaCode/text/usernames on due queue rows from `target_pool` + `comment_pool` (Staffroom-approved only) |
 | `dispatch` | **1 min** | `ops.dispatch.worker --apply --max 25` drains action_queue to the APK |
 | `recovery` | 5 min | `ops.sched.recovery --apply` account status transitions |
 | `proxy` | 15 min | `ops.sched.proxy --apply --register trumpproxies_yuge` rotation / heal |

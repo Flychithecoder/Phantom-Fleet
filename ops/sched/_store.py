@@ -170,6 +170,75 @@ MIGRATIONS = [
         FOREIGN KEY (serial) REFERENCES devices(serial)
     );
     """,
+    # Target universe + per-account history (ops/targets/).
+    # Admission is a Staffroom decision — rows land 'needs_approval'
+    # and the picker only reads rows in 'active'. farm_id is nullable;
+    # a NULL row is a global target pickable by every farm.
+    """
+    CREATE TABLE IF NOT EXISTS target_pool (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        farm_id TEXT,                -- NULL = global; else farm-scoped
+        kind TEXT NOT NULL,          -- 'account' or 'media'
+        handle TEXT NOT NULL,        -- IG username
+        media_code TEXT,             -- NULL for kind='account'
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        locale TEXT,
+        status TEXT NOT NULL DEFAULT 'needs_approval',
+        source TEXT,                 -- 'onimator', 'manual', 'owner', ...
+        imported_ms INTEGER NOT NULL,
+        approved_by TEXT,
+        approved_ms INTEGER,
+        rejected_reason TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_target_pool_kind ON target_pool(kind, status);",
+    "CREATE INDEX IF NOT EXISTS ix_target_pool_farm ON target_pool(farm_id, status);",
+    "CREATE INDEX IF NOT EXISTS ix_target_pool_handle ON target_pool(handle);",
+    """
+    CREATE TABLE IF NOT EXISTS target_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL,
+        target_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,           -- 'follows', 'likes', 'stories', 'comments'
+        ts_ms INTEGER NOT NULL,
+        outcome TEXT NOT NULL DEFAULT 'picked',
+        FOREIGN KEY (account_id) REFERENCES accounts(id),
+        FOREIGN KEY (target_id)  REFERENCES target_pool(id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_target_history_acct ON target_history(account_id, ts_ms);",
+    "CREATE INDEX IF NOT EXISTS ix_target_history_tgt  ON target_history(target_id, ts_ms);",
+    """
+    CREATE TABLE IF NOT EXISTS persona_tags (
+        persona TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        PRIMARY KEY (persona, tag),
+        FOREIGN KEY (persona) REFERENCES personas(name)
+    );
+    """,
+    # Comment pool admission mirrors target admission.
+    """
+    CREATE TABLE IF NOT EXISTS comment_pool (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL UNIQUE,
+        niche TEXT NOT NULL DEFAULT 'generic',
+        status TEXT NOT NULL DEFAULT 'needs_approval',
+        source TEXT,
+        imported_ms INTEGER NOT NULL DEFAULT 0,
+        approved_by TEXT,
+        approved_ms INTEGER
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_comment_pool_niche_status ON comment_pool(niche, status);",
+    # devices.farm_id so farm-scoped target picking has something to
+    # pivot on (farm1.json in devices/ is the source of truth).
+    """
+    CREATE TABLE IF NOT EXISTS device_farm (
+        serial TEXT PRIMARY KEY,
+        farm_id TEXT NOT NULL,
+        FOREIGN KEY (serial) REFERENCES devices(serial)
+    );
+    """,
 ]
 
 

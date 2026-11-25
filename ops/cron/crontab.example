@@ -12,6 +12,12 @@ PF_ROOT=/opt/phantom-fleet-clone
 PF_PY=/opt/phantom-fleet-clone/.venv/bin/python
 PF_LOG=/var/log/phantom-fleet/cron.log
 
+# Target hydrator: fill missing targetUsername / mediaCode / text on
+# due queue rows BEFORE the dispatcher picks them up. 30s cadence so a
+# fresh tick never waits more than one minute for its targets.
+* * * * *   cd $PF_ROOT && $PF_PY -m ops.targets.hydrator --apply --max 200 >> $PF_LOG 2>&1
+* * * * *   sleep 30; cd $PF_ROOT && $PF_PY -m ops.targets.hydrator --apply --max 200 >> $PF_LOG 2>&1
+
 # Hot path: dispatcher drains action_queue every minute.
 * * * * *   cd $PF_ROOT && $PF_PY -m ops.dispatch.worker --apply --max 25 >> $PF_LOG 2>&1
 

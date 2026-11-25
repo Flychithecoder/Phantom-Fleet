@@ -23,6 +23,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $jobs = @(
+    @{Name="target_hydrate";     Minutes=1;      Argv="-m ops.targets.hydrator --apply --max 200"}
     @{Name="dispatch";           Minutes=1;      Argv="-m ops.dispatch.worker --apply --max 25"}
     @{Name="recovery";           Minutes=5;      Argv="-m ops.sched.recovery --apply"}
     @{Name="proxy";              Minutes=15;     Argv="-m ops.sched.proxy --apply --register trumpproxies_yuge"}

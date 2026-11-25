@@ -54,6 +54,7 @@ from .routes import simulate as simulate_routes
 from .routes import time_machine as time_machine_routes
 from .routes import tool_exchange as tool_exchange_routes
 from .routes import owner_brief as owner_brief_routes
+from .routes import targets as targets_routes
 from .routes import cost_quality_router as cost_quality_router_routes
 from .routes import safety_critic as safety_critic_routes
 from .routes import mission_composer as mission_composer_routes
@@ -702,6 +703,7 @@ def create_app() -> FastAPI:
     application.include_router(time_machine_routes.router)
     application.include_router(tool_exchange_routes.router)
     application.include_router(owner_brief_routes.router)
+    application.include_router(targets_routes.router)
     application.include_router(cost_quality_router_routes.router)
     application.include_router(safety_critic_routes.router)
     application.include_router(mission_composer_routes.router)

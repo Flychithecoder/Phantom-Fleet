@@ -111,6 +111,14 @@ export function staffroomMcpSpawn() {
     "mcp__staffroom__staffroom_tool_details",
     "mcp__staffroom__staffroom_tool_status",
     "mcp__staffroom__staffroom_propose_work",
+    "mcp__staffroom__staffroom_list_pending_targets",
+    "mcp__staffroom__staffroom_approve_target",
+    "mcp__staffroom__staffroom_reject_target",
+    "mcp__staffroom__staffroom_list_pending_comments",
+    "mcp__staffroom__staffroom_approve_comment",
+    "mcp__staffroom__staffroom_reject_comment",
+    "mcp__staffroom__staffroom_ingest_targets",
+    "mcp__staffroom__staffroom_ingest_comments",
   ].join(",");
   return {
     cliArgs: [
