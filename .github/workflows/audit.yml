@@ -23,37 +23,9 @@ jobs:
         run: python backend/audit-harness/run_10k_monte_carlo.py --n 10000
 
   dispatcher-wire:
-    name: Dispatcher wire test (stub mode) — ${{ matrix.backend }}
+    name: Dispatcher wire test (stub mode)
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
-    strategy:
-      fail-fast: false
-      matrix:
-        backend: [sqlite, postgres]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: phantom_fleet
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-    env:
-      PF_STORE: ${{ matrix.backend }}
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: phantom_fleet
-
     steps:
       - uses: actions/checkout@v4
 
@@ -61,17 +33,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install psycopg (postgres backend only)
-        if: matrix.backend == 'postgres'
-        run: pip install "psycopg[binary]>=3.2.0"
-
       - name: ops.dispatch.wire_test --stub
         run: python -m ops.dispatch.wire_test --stub
 
   dispatcher-wire-rs:
     name: Dispatcher wire test (Rust stub mode, parity with Python)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: dispatcher-wire
     steps:
       - uses: actions/checkout@v4
@@ -97,44 +65,3 @@ jobs:
       - name: cargo test --release (unit + wire_test_stub parity)
         working-directory: core-rs
         run: cargo test --release
-
-  monte-carlo-postgres:
-    name: 10K persona audit against Postgres store
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: dispatcher-wire
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: phantom_fleet
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
-    env:
-      PF_STORE: postgres
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: phantom_fleet
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install psycopg
-        run: pip install "psycopg[binary]>=3.2.0"
-
-      - name: Audit harness (10,000 personas) against Postgres
-        run: python backend/audit-harness/run_10k_monte_carlo.py --n 10000

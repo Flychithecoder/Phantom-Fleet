@@ -2,17 +2,37 @@
 name = "pf-core"
 version = "0.1.0"
 edition = "2021"
-description = "Phantom Fleet deterministic control plane (Rust port of ops/sched)"
+description = "Phantom Fleet deterministic control plane (Rust port of ops/sched + ops/dispatch)"
 license = "proprietary"
 
 [lib]
 name = "pf_core"
 path = "src/lib.rs"
 
+[[bin]]
+name = "dispatcher-rs"
+path = "src/bin/dispatcher_rs.rs"
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+# The Postgres migration session wires this up; present so dispatcher
+# compiles against pg without touching dispatcher call sites.
+postgres = ["sqlx/postgres"]
+
 [dependencies]
-# Deliberately empty. The port stays stdlib-only so there is zero
-# external surface and the resulting .so is trivially auditable.
-# Swap for `rand` only if we need a thread-local CSPRNG; `getrandom`
-# via syscall works today.
+# Kept minimal. warming.rs stays stdlib-only; everything else lives
+# under the dispatcher modules.
+sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio-rustls", "macros", "json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+regex = "1"
+once_cell = "1"
 
 [dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "io-util"] }
