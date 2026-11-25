@@ -375,10 +375,13 @@ async function handleChat(req, res) {
     return;
   } catch (err) {
     const ms = Date.now() - t0;
+    const fleetTag = extractFleetTag(prompt);
     audit({
       event: "fail",
       bearer_tail: bearer.slice(-4),
       pinned_model: pinnedModel,
+      workflow: fleetTag.workflow,
+      fleet_request_id: fleetTag.request_id,
       prompt_hash: promptHash,
       error: String(err.message || err).slice(0, 500),
       duration_ms: ms,
