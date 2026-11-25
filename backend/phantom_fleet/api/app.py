@@ -55,6 +55,7 @@ from .routes import time_machine as time_machine_routes
 from .routes import tool_exchange as tool_exchange_routes
 from .routes import owner_brief as owner_brief_routes
 from .routes import cost_quality_router as cost_quality_router_routes
+from .routes import safety_critic as safety_critic_routes
 from .routes import scheduler_pro as scheduler_pro_routes
 from .routes import ai_agent_routes
 from .routes import pods as pods_routes
@@ -700,6 +701,7 @@ def create_app() -> FastAPI:
     application.include_router(tool_exchange_routes.router)
     application.include_router(owner_brief_routes.router)
     application.include_router(cost_quality_router_routes.router)
+    application.include_router(safety_critic_routes.router)
     application.include_router(scheduler_pro_routes.router,  prefix="/api/scheduler-pro",    tags=["scheduler-pro"])
     application.include_router(ai_agent_routes.router,       prefix="/api/ai-agent",         tags=["ai-agent"])
     application.include_router(pods_routes.router,           prefix="/api/pods",             tags=["pods"])
