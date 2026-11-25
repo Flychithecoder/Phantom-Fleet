@@ -11,7 +11,7 @@ shim wraps these HTTP calls and nothing else.
 The Treg-driven platform-team agents listed in
 `docs/staffroom/01-team-roster.md` produce candidates:
 
-| Agent | Treg scope used | Posts to |
+| Agent | Treg scope used | Delivers to |
 |---|---|---|
 | `ig_target_scout` | `treg.instagram.hashtag.posts`, `treg.instagram.search.users` | `POST /api/targets/ingest` (kind=account) |
 | `ig_viral_hunter` | `treg.instagram.hashtag.posts` (sort=reels) | `POST /api/targets/ingest` (kind=media) |
