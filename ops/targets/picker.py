@@ -211,17 +211,28 @@ def pick_for(
 
 def _pick_comment(con: sqlite3.Connection, tags: list[str]) -> str | None:
     # Prefer niche overlap; fall back to 'generic'. Only 'active' rows.
+    # Deterministic least-recently-used: order by last_picked_ms ASC
+    # (NULLs first via COALESCE(0)), then by id ASC as tiebreak. Stamp
+    # last_picked_ms after reading so the next call rotates to a
+    # different row — fixes the "lowest-id-wins-forever" bug.
     row = None
     for niche in list(tags) + ["generic"]:
         row = con.execute(
-            "SELECT text FROM comment_pool "
+            "SELECT id, text FROM comment_pool "
             "WHERE status = 'active' AND niche = ? "
-            "ORDER BY id LIMIT 1",
+            "ORDER BY COALESCE(last_picked_ms, 0) ASC, id ASC LIMIT 1",
             (niche,),
         ).fetchone()
         if row:
             break
-    return row["text"] if row else None
+    if not row:
+        return None
+    import time as _time
+    con.execute(
+        "UPDATE comment_pool SET last_picked_ms = ? WHERE id = ?",
+        (int(_time.time() * 1000), int(row["id"])),
+    )
+    return row["text"]
 
 
 def record_touch(

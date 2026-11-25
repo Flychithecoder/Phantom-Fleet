@@ -61,8 +61,9 @@ def claim(con: sqlite3.Connection, limit: int, now_ms: int) -> list[dict]:
 
     Picks the oldest due_ms first so no account is starved. Transitions
     them to state='claimed' in one statement under an implicit
-    transaction; a crash between claim and dispatch leaves them
-    claimed, which the recovery sweeper reaps (future work).
+    transaction and stamps claimed_ms. A crash between claim and
+    dispatch leaves the row in 'claimed'; `sweep_stale_claims` reaps
+    those older than a threshold.
     """
     rows = con.execute(
         """
@@ -83,8 +84,9 @@ def claim(con: sqlite3.Connection, limit: int, now_ms: int) -> list[dict]:
     if ids:
         placeholders = ",".join("?" * len(ids))
         con.execute(
-            f"UPDATE action_queue SET state = 'claimed' WHERE id IN ({placeholders})",
-            ids,
+            f"UPDATE action_queue SET state = 'claimed', claimed_ms = ? "
+            f"WHERE id IN ({placeholders})",
+            [now_ms, *ids],
         )
     return [dict(r) for r in rows]
 
@@ -93,6 +95,50 @@ def release_claim(con: sqlite3.Connection, action_id: int) -> None:
     """If dispatch hard-fails before recording a result, hand the row
     back to the 'due' pool instead of leaving it stuck."""
     con.execute(
-        "UPDATE action_queue SET state = 'due' WHERE id = ? AND state = 'claimed'",
+        "UPDATE action_queue SET state = 'due', claimed_ms = NULL "
+        "WHERE id = ? AND state = 'claimed'",
         (action_id,),
     )
+
+
+# Default stale threshold: 5 minutes. A real dispatch rarely exceeds
+# the per-request timeout (30 s) plus HTTP + accessibility overhead;
+# anything claimed for 5 minutes is almost certainly orphaned by a
+# worker crash between claim and dispatch.
+STALE_CLAIM_MS = 5 * 60 * 1000
+
+
+def sweep_stale_claims(
+    con: sqlite3.Connection, now_ms: int,
+    stale_ms: int = STALE_CLAIM_MS,
+) -> dict:
+    """Reset rows stuck in 'claimed' past `stale_ms` back to 'due'.
+
+    Returns {reset: int, ids: list[int]}. Called by the cron supervisor
+    on its own cadence so it does not block the hot dispatch loop. It
+    uses claimed_ms (stamped by `claim`); rows with claimed_ms IS NULL
+    are legacy pre-migration claims and are also eligible after
+    stale_ms worth of wallclock since due_ms.
+    """
+    threshold = now_ms - stale_ms
+    rows = con.execute(
+        """
+        SELECT id FROM action_queue
+        WHERE state = 'claimed'
+          AND (
+                (claimed_ms IS NOT NULL AND claimed_ms < ?)
+             OR (claimed_ms IS NULL     AND due_ms      < ?)
+          )
+        """,
+        (threshold, threshold),
+    ).fetchall()
+    ids = [int(r["id"]) for r in rows]
+    if ids:
+        placeholders = ",".join("?" * len(ids))
+        con.execute(
+            f"UPDATE action_queue SET state = 'due', claimed_ms = NULL, "
+            f"attempts = attempts + 1 "
+            f"WHERE id IN ({placeholders})",
+            ids,
+        )
+    return {"reset": len(ids), "ids": ids}

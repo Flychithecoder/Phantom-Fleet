@@ -144,10 +144,26 @@ def make_commitment(signer_key_hex: str | None = None) -> dict:
     _init()
     key_hex = signer_key_hex or os.environ.get("PF_AUDIT_SIGNER_KEY")
     if not key_hex:
-        # Mint and persist a local key the first time. Owner rotates
-        # by overwriting the env var.
-        key_hex = secrets.token_hex(32)
-    key = bytes.fromhex(key_hex)
+        # Refuse: a weekly commitment is pointless without a stable key
+        # the owner can later use to verify. Mint one with
+        # `python ops/audit/provision_signer_key.py` and export it in
+        # the cron environment.
+        raise RuntimeError(
+            "PF_AUDIT_SIGNER_KEY is not set. Run "
+            "`python ops/audit/provision_signer_key.py` to mint one, "
+            "save the output, and export it before calling make_commitment."
+        )
+    try:
+        key = bytes.fromhex(key_hex)
+    except ValueError as exc:
+        raise RuntimeError(
+            "PF_AUDIT_SIGNER_KEY must be 64 hex chars (32 bytes). "
+            f"Got {len(key_hex)} chars that failed hex decode."
+        ) from exc
+    if len(key) != 32:
+        raise RuntimeError(
+            f"PF_AUDIT_SIGNER_KEY must decode to 32 bytes; got {len(key)}."
+        )
     head = current_head()
     sig = hmac.new(key, head.encode("ascii"), hashlib.sha256).hexdigest()
     fp = hashlib.sha256(key).hexdigest()[:16]

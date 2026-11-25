@@ -242,12 +242,27 @@ MIGRATIONS = [
 ]
 
 
+_ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
+    # (table, column, sql type). All idempotent via PRAGMA check below.
+    ("action_queue", "claimed_ms", "INTEGER"),
+    ("comment_pool", "last_picked_ms", "INTEGER"),
+]
+
+
+def _apply_column_migrations(con: sqlite3.Connection) -> None:
+    for table, col, defn in _ADDITIVE_COLUMNS:
+        existing = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+        if col not in existing:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {defn}")
+
+
 def apply_migrations(store: Path | None = None) -> None:
     store = store or STORE
     store.parent.mkdir(parents=True, exist_ok=True)
     with connect(store) as con:
         for stmt in MIGRATIONS:
             con.executescript(stmt)
+        _apply_column_migrations(con)
 
 
 @contextlib.contextmanager
