@@ -119,6 +119,7 @@ export function staffroomMcpSpawn() {
     "mcp__staffroom__staffroom_reject_comment",
     "mcp__staffroom__staffroom_ingest_targets",
     "mcp__staffroom__staffroom_ingest_comments",
+    "mcp__staffroom__staffroom_generate_comments",
   ].join(",");
   return {
     cliArgs: [

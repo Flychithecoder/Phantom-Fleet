@@ -69,6 +69,7 @@ from .routes import profiles as profiles_routes
 from .routes import trending as trending_routes
 from .routes import learning as learning_routes
 from .routes import reddit as reddit_routes
+from .routes import comments as comments_routes
 
 log = logging.getLogger("phantom_fleet.api")
 
@@ -719,6 +720,7 @@ def create_app() -> FastAPI:
     application.include_router(learning_routes.router,       prefix="/api/learning",         tags=["learning"])
     application.include_router(reddit_routes.router,         prefix="/api/reddit",           tags=["reddit"])
     application.include_router(fleet_mirror_routes.router,   prefix="/api/fleet-mirror",     tags=["fleet-mirror"])
+    application.include_router(comments_routes.router,       tags=["comments"])
 
     # ------------------------------------------------------------------
     # Health

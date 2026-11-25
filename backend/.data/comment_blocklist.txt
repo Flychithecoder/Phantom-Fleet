@@ -1,0 +1,4 @@
+# Phantom Fleet comment blocklist
+# One word or phrase per line, case-insensitive substring match.
+# Lines starting with # are comments. Empty lines ignored.
+# Loaded by backend/phantom_fleet/core/comment_safety.py.
